@@ -27,10 +27,6 @@ train_dpos(ECB, model_name='/home/yaolong/PT_MODELS/PT_MODELS/roberta-base', PLM
 print('dataset: gvc')
 train_dpos(GVC, model_name='/home/yaolong/PT_MODELS/PT_MODELS/roberta-base', PLM='small', device=device)
 
-# D-Long changwenben 
-#  batch_size=20, n_iters=10, lr_lm(Language model)=0.000001, lr_class(classifier)=0.0001, max_sequence_length = 1024
-# train_dpos(ECB, model_name='/home/yaolong/PT_MODELS/PT_MODELS/allenai/longformer-base-4096', PLM='long')
-# train_dpos(GVC, model_name='/home/yaolong/PT_MODELS/PT_MODELS/allenai/longformer-base-4096', PLM='long')
 
 # Prediction
 # Baselines

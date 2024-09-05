@@ -20,10 +20,6 @@ GVC='gvc'
 
 
 # Training
-# D-Small
-#  batch_size=20, n_iters=10, lr_lm(Language model)=0.000001, lr_class(classifier)=0.0001, max_sequence_length = 512
-# train_dpos(ECB, model_name='/home/yaolong/PT_MODELS/PT_MODELS/roberta-base')
-# train_dpos(GVC, model_name='/home/yaolong/PT_MODELS/PT_MODELS/roberta-base')
 device = 5
 # D-Long
 #  batch_size=20, n_iters=10, lr_lm(Language model)=0.000001, lr_class(classifier)=0.0001, max_sequence_length = 1024

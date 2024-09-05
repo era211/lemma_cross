@@ -310,7 +310,7 @@ if __name__ == '__main__':
     # predict('ecb', TEST)
     #
     # predict('ecb', DEV, heu='lh_oracle')
-    # predict('ecb', TEST, heu='lh_oracle')
+    predict('ecb', TEST, heu='lh_oracle')
     #
     # predict('gvc', DEV)
     # predict('gvc', TEST)
@@ -321,9 +321,9 @@ if __name__ == '__main__':
     # predict_with_dpos('ecb', 'dev', dpos, heu='lh_oracle')
 
 
-    dataset = 'gvc'
-    split = 'test'
-    heu = 'lh_oracle'
+    # dataset = 'gvc'
+    # split = 'test'
+    # heu = 'lh_oracle'
     # dpos_path =  './datasets/gvc/scorer/'
     # save_dpos_scores(dataset, split, dpos_path, heu='lh', text_key='bert_sentence', max_sentence_len=512)
 
@@ -342,5 +342,5 @@ if __name__ == '__main__':
     # dpos = get_dpos(dataset, heu, split)
     # predict_with_dpos(dataset, split, dpos, heu=heu)
     # save_dpos_scores('gvc', 'dev', dpos_path, heu='lh')
-    threshold_ablation()
+    # threshold_ablation()
     # mention_pair_analysis(dataset, split, heu)

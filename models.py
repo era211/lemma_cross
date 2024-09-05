@@ -67,12 +67,12 @@ class CrossEncoder(nn.Module):
             output = self.model(input_ids,
                                 attention_mask=attention_mask)
 
-        last_hidden_states = output.last_hidden_state
-        cls_vector = output.pooler_output
+        last_hidden_states = output.last_hidden_state  # (16,512,768)
+        cls_vector = output.pooler_output  # (16,768)
 
         arg1_vec = None
-        if arg1 is not None:
-            arg1_vec = (last_hidden_states * arg1.unsqueeze(-1)).sum(1)
+        if arg1 is not None:  # arg1:(16,512)
+            arg1_vec = (last_hidden_states * arg1.unsqueeze(-1)).sum(1)  # (16,768)  触发词的向量包含整个句子信息
         arg2_vec = None
         if arg2 is not None:
             arg2_vec = (last_hidden_states * arg2.unsqueeze(-1)).sum(1)

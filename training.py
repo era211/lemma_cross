@@ -34,7 +34,7 @@ def train_dpos(dataset, model_name=None, PLM=None, device=None):
     parallel_model = torch.nn.DataParallel(scorer_module, device_ids=device_ids)
     parallel_model.module.to(device)
     train(train_pairs, train_labels, dev_pairs, dev_labels, parallel_model, evt_mention_map, dataset_folder, device, PLM,
-          batch_size=20, n_iters=10, lr_lm=0.000001, lr_class=0.0001)
+          batch_size=16, n_iters=10, lr_lm=0.000001, lr_class=0.0001)
 
 
 def train(train_pairs,
@@ -46,7 +46,7 @@ def train(train_pairs,
           working_folder,
           device,
           PLM,
-          batch_size=16,
+          batch_size=8,
           n_iters=50,
           lr_lm=0.00001,
           lr_class=0.001):
@@ -64,20 +64,20 @@ def train(train_pairs,
     tokenizer = parallel_model.module.tokenizer
 
     # prepare data
-    train_ab, train_ba = tokenize(tokenizer, train_pairs, mention_map, parallel_model.module.end_id, text_key='bert_sentence', max_sentence_len=512)  # 返回编码后的内容，inputs_id, attention_mask, position_id
+    train_ab, train_ba = tokenize(tokenizer, train_pairs, mention_map, parallel_model.module.end_id, text_key='bert_sentence', max_sentence_len=512)  # 返回编码后的内容，inputs_id, attention_mask, position_id，对两个提及的句子分别进行处理，最后按行堆叠到一起
     dev_ab, dev_ba = tokenize(tokenizer, dev_pairs, mention_map, parallel_model.module.end_id, text_key='bert_sentence', max_sentence_len=512)
 
     # labels
     train_labels = torch.FloatTensor(train_labels)
     dev_labels = torch.LongTensor(dev_labels)
-
+    f1 = 0.0
     for n in tqdm(range(n_iters), desc='Epoch'):
-        train_indices = list(range(len(train_pairs)))
+        train_indices = list(range(len(train_pairs)))  # 得到训练对中的样本索引列表
         random.shuffle(train_indices)
         iteration_loss = 0.
         # new_batch_size = batching(len(train_indices), batch_size, len(device_ids))
         new_batch_size = batch_size
-        for i in tqdm(range(0, len(train_indices), new_batch_size), desc='Training'):
+        for i in tqdm(range(0, len(train_indices[:100]), new_batch_size), desc='Training'):
             optimizer.zero_grad()
             batch_indices = train_indices[i: i + new_batch_size]
 
@@ -107,6 +107,19 @@ def train(train_pairs,
         print("dev precision:", precision(dev_predictions, dev_labels))
         print("dev recall:", recall(dev_predictions, dev_labels))
         print("dev f1:", f1_score(dev_predictions, dev_labels))
+
+        dev_f1 = f1_score(dev_predictions, dev_labels)
+        if dev_f1 > f1:
+            f1 = dev_f1
+            scorer_folder = working_folder + PLM + '/best_f1_scorer/'
+            if not os.path.exists(scorer_folder):
+                os.makedirs(scorer_folder)
+            model_path = scorer_folder + '/linear.chkpt'
+            torch.save(parallel_model.module.linear.state_dict(), model_path)
+            parallel_model.module.model.save_pretrained(scorer_folder + '/bert')
+            parallel_model.module.tokenizer.save_pretrained(scorer_folder + '/bert')
+            print(f'saved best f1 model')
+            
         if n % 2 == 0:
             scorer_folder = working_folder + PLM + f'/scorer/chk_{n}'
             if not os.path.exists(scorer_folder):
@@ -127,4 +140,5 @@ def train(train_pairs,
 
 
 if __name__ == '__main__':
-    train_dpos('ecb', model_name='/home/yaolong/PT_MODELS/PT_MODELS/roberta-base')
+    device = 0
+    train_dpos('ecb', model_name='/root/lanyun-tmp/roberta-base', PLM='small', device=device)

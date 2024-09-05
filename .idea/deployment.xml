@@ -1,11 +1,46 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" autoUpload="Always" serverName="Copy of project-level server 'yaolong' (7)" remoteFilesAllowedToDisappearOnAutoupload="false">
+  <component name="PublishConfigData" autoUpload="Always" serverName="root@link.lanyun.net:12674 password (3)" remoteFilesAllowedToDisappearOnAutoupload="false">
     <serverData>
       <paths name="Copy of project-level server 'yaolong'">
         <serverdata>
           <mappings>
             <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="Copy of project-level server 'yaolong' (10)">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/yaolong/lemma_ce_coref-main" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="Copy of project-level server 'yaolong' (11)">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/yaolong/lemma_ce_coref-main" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="Copy of project-level server 'yaolong' (12)">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/yaolong/lemma_ce_coref-main" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="Copy of project-level server 'yaolong' (13)">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="Copy of project-level server 'yaolong' (14)">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/yaolong/lemma_ce_coref-main" local="$PROJECT_DIR$" />
           </mappings>
         </serverdata>
       </paths>
@@ -51,10 +86,52 @@
           </mappings>
         </serverdata>
       </paths>
+      <paths name="Copy of project-level server 'yaolong' (8)">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="Copy of project-level server 'yaolong' (9)">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
       <paths name="nlp@10.109.118.166:22">
         <serverdata>
           <mappings>
             <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="root@link.lanyun.net:12674 password">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="root@link.lanyun.net:12674 password (2)">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/root/lanyun-tmp/lemma" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="root@link.lanyun.net:12674 password (3)">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/root/lanyun-tmp/lemma" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="root@link.lanyun.net:21346 password">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/root/lanyun-tmp/lemma" local="$PROJECT_DIR$" />
           </mappings>
         </serverdata>
       </paths>

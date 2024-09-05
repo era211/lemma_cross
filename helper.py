@@ -61,19 +61,19 @@ def get_arg_attention_mask(input_ids, parallel_model):
     """
     input_ids.cpu()
 
-    num_inputs = input_ids.shape[0]
+    num_inputs = input_ids.shape[0]  # len(batch_size)
 
     m_start_indicator = input_ids == parallel_model.module.start_id
     m_end_indicator = input_ids == parallel_model.module.end_id
 
-    m = m_start_indicator + m_end_indicator
+    m = m_start_indicator + m_end_indicator  # 得到事件触发词所在位置，其他地方为false
 
     # non-zero indices are the tokens corresponding to <m> and </m>
-    nz_indexes = m.nonzero()[:, 1].reshape((num_inputs, 4))
+    nz_indexes = m.nonzero()[:, 1].reshape((num_inputs, 4))  # 得到<m>和</m>所在tokens序列中的索引
 
     # Now we need to make the tokens between <m> and </m> to be non-zero
     q = torch.arange(m.shape[1])
-    q = q.repeat(m.shape[0], 1)  # (20,512)
+    q = q.repeat(m.shape[0], 1)  # (batch_size, 512)
 
     # all indices greater than and equal to the first <m> become True
     msk_0 = (nz_indexes[:, 0].repeat(m.shape[1], 1).transpose(0, 1)) <= q
@@ -122,7 +122,7 @@ def forward_ab(parallel_model, ab_dict, device, indices, lm_only=False):
 
 def tokenize(tokenizer, mention_pairs, mention_map, m_end, max_sentence_len=1024, text_key='bert_doc', truncate=True):
     if max_sentence_len is None:
-        max_sentence_len = tokenizer.model_max_length
+        max_sentence_len = tokenizer.model_max_length  # 512
 
     pairwise_bert_instances_ab = []
     pairwise_bert_instances_ba = []
@@ -131,14 +131,14 @@ def tokenize(tokenizer, mention_pairs, mention_map, m_end, max_sentence_len=1024
     doc_end = '</doc-s>'
 
     for (m1, m2) in mention_pairs:
-        sentence_a = mention_map[m1][text_key]
+        sentence_a = mention_map[m1][text_key]  # text_key=bert_sentence
         sentence_b = mention_map[m2][text_key]
 
         def make_instance(sent_a, sent_b):
             return ' '.join(['<g>', doc_start, sent_a, doc_end]), \
                    ' '.join([doc_start, sent_b, doc_end])
 
-        instance_ab = make_instance(sentence_a, sentence_b)
+        instance_ab = make_instance(sentence_a, sentence_b)  # 得到所有提及对的句子
         pairwise_bert_instances_ab.append(instance_ab)
 
         instance_ba = make_instance(sentence_b, sentence_a)
@@ -147,29 +147,29 @@ def tokenize(tokenizer, mention_pairs, mention_map, m_end, max_sentence_len=1024
     def truncate_with_mentions(input_ids):
         input_ids_truncated = []
         for input_id in input_ids:
-            m_end_index = input_id.index(m_end)
+            m_end_index = input_id.index(m_end)  # model.end_id在当前input_ids中所在位置的索引
 
             curr_start_index = max(0, m_end_index - (max_sentence_len // 4))
 
             in_truncated = input_id[curr_start_index: m_end_index] + \
-                           input_id[m_end_index: m_end_index + (max_sentence_len // 4)]
-            in_truncated = in_truncated + [tokenizer.pad_token_id] * (max_sentence_len // 2 - len(in_truncated))
+                           input_id[m_end_index: m_end_index + (max_sentence_len // 4)]  # 截取编码当中的一部分，end_ids向前向后各看512//4步
+            in_truncated = in_truncated + [tokenizer.pad_token_id] * (max_sentence_len // 2 - len(in_truncated))  # 256
             input_ids_truncated.append(in_truncated)
 
         return torch.LongTensor(input_ids_truncated)
 
     def ab_tokenized(pair_wise_instances):
-        instances_a, instances_b = zip(*pair_wise_instances)
+        instances_a, instances_b = zip(*pair_wise_instances)  # pair_wise_instances列表中保存的都是提及句子对的元组
 
-        tokenized_a = tokenizer(list(instances_a), add_special_tokens=False)
+        tokenized_a = tokenizer(list(instances_a), add_special_tokens=False)  # 对instance_a中的所有句子进行编码，得到input_ids和attention_mask（句子部分为1）
         tokenized_b = tokenizer(list(instances_b), add_special_tokens=False)
 
-        tokenized_a = truncate_with_mentions(tokenized_a['input_ids'])
+        tokenized_a = truncate_with_mentions(tokenized_a['input_ids'])  # (27928, 256)对tokenizer_a的input_ids中的每个input_id进行截断处理，从end_id所在位置向前向后看512/4步，然后pad到256长度
         positions_a = torch.arange(tokenized_a.shape[-1]).expand(tokenized_a.shape)
         tokenized_b = truncate_with_mentions(tokenized_b['input_ids'])
-        positions_b = torch.arange(tokenized_b.shape[-1]).expand(tokenized_b.shape)
+        positions_b = torch.arange(tokenized_b.shape[-1]).expand(tokenized_b.shape)  # (27928, 256)
 
-        tokenized_ab_ = torch.hstack((tokenized_a, tokenized_b))
+        tokenized_ab_ = torch.hstack((tokenized_a, tokenized_b))  # (27928, 256+256)-->(27928, 512)
         positions_ab = torch.hstack((positions_a, positions_b))
 
         tokenized_ab_dict = {'input_ids': tokenized_ab_,
@@ -180,7 +180,7 @@ def tokenize(tokenizer, mention_pairs, mention_map, m_end, max_sentence_len=1024
         return tokenized_ab_dict
 
     if truncate:
-        tokenized_ab = ab_tokenized(pairwise_bert_instances_ab)
+        tokenized_ab = ab_tokenized(pairwise_bert_instances_ab)  # 得到input_ids、attention_mask、position_ids，在处理过程中，是对两个句子分别处理最后堆叠到一起
         tokenized_ba = ab_tokenized(pairwise_bert_instances_ba)
     else:
         instances_ab = [' '.join(instance) for instance in pairwise_bert_instances_ab]
@@ -294,8 +294,8 @@ def generate_key_file(coref_map_tuples, name, out_dir, out_file_path):
             else:
                 clus_to_int[clus_id] = clus_number
                 clus_number += 1
-                clus_int = clus_to_int[clus_id]
-            of.write("%s\t0\t%d\t%s\t(%d)\n" % (name, i, en_id, clus_int))
+                clus_int = clus_to_int[clus_id]  # 聚类的索引
+            of.write("%s\t0\t%d\t%s\t(%d)\n" % (name, i, en_id, clus_int)) # 当前事件提及所在的聚类的索引
         of.write("#end document\n")
 
 
