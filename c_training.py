@@ -1,6 +1,6 @@
 import pickle
 import torch
-from helper import tokenize, forward_ab, f1_score, accuracy, precision, recall
+from c_helper import tokenize, forward_ab, f1_score, accuracy, precision, recall
 from prediction import predict_dpos
 import random
 from tqdm import tqdm

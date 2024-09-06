@@ -5,6 +5,7 @@ import os
 import numpy as np
 import torch
 import re
+
 TRAIN = 'train'
 DEV = 'dev'
 TEST = 'test'
@@ -32,7 +33,7 @@ def load_lemma_dataset(tsv_path, force_balance=False):
         min_label_len = len(label2eg[min_label])
 
         max_eg_len = max([len(val) for val in label2eg.values()])
-        random_egs = random.choices(label2eg[min_label], k=max_eg_len-min_label_len)
+        random_egs = random.choices(label2eg[min_label], k=max_eg_len - min_label_len)
         all_examples.extend(random_egs)
 
         label2eg = defaultdict(list)
@@ -133,14 +134,13 @@ def tokenize(tokenizer, mention_pairs, mention_map, m_end, max_sentence_len=1024
     doc_start = '<doc-s>'
     doc_end = '</doc-s>'
 
-
     for (m1, m2) in mention_pairs:
         sentence_a = mention_map[m1][text_key]  # text_key=bert_sentence
         sentence_b = mention_map[m2][text_key]
-        
+
         def make_instance(sent_a, sent_b):
             return ' '.join(['<g>', doc_start, sent_a, doc_end]), \
-                   ' '.join([doc_start, sent_b, doc_end])
+                ' '.join([doc_start, sent_b, doc_end])
 
         def make_sentence_c_only(sent_a, sent_b):
             masked_sentence_a = re.sub(r'<m>.*?</m>', '<mask>', sent_a)
@@ -159,7 +159,6 @@ def tokenize(tokenizer, mention_pairs, mention_map, m_end, max_sentence_len=1024
         c_only_pairwise_bert_instances_ab.append(c_only_instance_ab)
         c_only_pairwise_bert_instances_ba.append(c_only_instance_ba)
 
-
     def truncate_with_mentions(input_ids):
         input_ids_truncated = []
         for input_id in input_ids:
@@ -168,7 +167,8 @@ def tokenize(tokenizer, mention_pairs, mention_map, m_end, max_sentence_len=1024
             curr_start_index = max(0, m_end_index - (max_sentence_len // 4))
 
             in_truncated = input_id[curr_start_index: m_end_index] + \
-                           input_id[m_end_index: m_end_index + (max_sentence_len // 4)]  # 截取编码当中的一部分，end_ids向前向后各看512//4步
+                           input_id[
+                           m_end_index: m_end_index + (max_sentence_len // 4)]  # 截取编码当中的一部分，end_ids向前向后各看512//4步
             in_truncated = in_truncated + [tokenizer.pad_token_id] * (max_sentence_len // 2 - len(in_truncated))  # 256
             input_ids_truncated.append(in_truncated)
 
@@ -177,10 +177,12 @@ def tokenize(tokenizer, mention_pairs, mention_map, m_end, max_sentence_len=1024
     def ab_tokenized(pair_wise_instances):
         instances_a, instances_b = zip(*pair_wise_instances)  # pair_wise_instances列表中保存的都是提及句子对的元组
 
-        tokenized_a = tokenizer(list(instances_a), add_special_tokens=False)  # 对instance_a中的所有句子进行编码，得到input_ids和attention_mask（句子部分为1）
+        tokenized_a = tokenizer(list(instances_a),
+                                add_special_tokens=False)  # 对instance_a中的所有句子进行编码，得到input_ids和attention_mask（句子部分为1）
         tokenized_b = tokenizer(list(instances_b), add_special_tokens=False)
 
-        tokenized_a = truncate_with_mentions(tokenized_a['input_ids'])  # (27928, 256)对tokenizer_a的input_ids中的每个input_id进行截断处理，从end_id所在位置向前向后看512/4步，然后pad到256长度
+        tokenized_a = truncate_with_mentions(tokenized_a[
+                                                 'input_ids'])  # (27928, 256)对tokenizer_a的input_ids中的每个input_id进行截断处理，从end_id所在位置向前向后看512/4步，然后pad到256长度
         positions_a = torch.arange(tokenized_a.shape[-1]).expand(tokenized_a.shape)
         tokenized_b = truncate_with_mentions(tokenized_b['input_ids'])
         positions_b = torch.arange(tokenized_b.shape[-1]).expand(tokenized_b.shape)  # (27928, 256)
@@ -196,7 +198,8 @@ def tokenize(tokenizer, mention_pairs, mention_map, m_end, max_sentence_len=1024
         return tokenized_ab_dict
 
     if truncate:
-        tokenized_ab = ab_tokenized(pairwise_bert_instances_ab)  # 得到input_ids、attention_mask、position_ids，在处理过程中，是对两个句子分别处理最后堆叠到一起
+        tokenized_ab = ab_tokenized(
+            pairwise_bert_instances_ab)  # 得到input_ids、attention_mask、position_ids，在处理过程中，是对两个句子分别处理最后堆叠到一起
         tokenized_ba = ab_tokenized(pairwise_bert_instances_ba)
     else:
         instances_ab = [' '.join(instance) for instance in pairwise_bert_instances_ab]
@@ -206,14 +209,16 @@ def tokenize(tokenizer, mention_pairs, mention_map, m_end, max_sentence_len=1024
         tokenized_ab_input_ids = torch.LongTensor(tokenized_ab['input_ids'])
 
         tokenized_ab = {'input_ids': torch.LongTensor(tokenized_ab['input_ids']),
-                         'attention_mask': torch.LongTensor(tokenized_ab['attention_mask']),
-                         'position_ids': torch.arange(tokenized_ab_input_ids.shape[-1]).expand(tokenized_ab_input_ids.shape)}
+                        'attention_mask': torch.LongTensor(tokenized_ab['attention_mask']),
+                        'position_ids': torch.arange(tokenized_ab_input_ids.shape[-1]).expand(
+                            tokenized_ab_input_ids.shape)}
 
         tokenized_ba = tokenizer(list(instances_ba), add_special_tokens=False, padding=True)
         tokenized_ba_input_ids = torch.LongTensor(tokenized_ba['input_ids'])
         tokenized_ba = {'input_ids': torch.LongTensor(tokenized_ba['input_ids']),
                         'attention_mask': torch.LongTensor(tokenized_ba['attention_mask']),
-                        'position_ids': torch.arange(tokenized_ba_input_ids.shape[-1]).expand(tokenized_ba_input_ids.shape)}
+                        'position_ids': torch.arange(tokenized_ba_input_ids.shape[-1]).expand(
+                            tokenized_ba_input_ids.shape)}
 
     return tokenized_ab, tokenized_ba
 
@@ -256,11 +261,12 @@ def generate_mention_pairs(mention_map, split):
     -------
     list: A list of all possible mention pairs within a topic
     """
-    split_mention_ids = sorted([m_id for m_id, m in mention_map.items() if m['split'] == split])  #按train、dev、test分别从当前数据集中读取对应的数据，这里是事件类型为evt的数据
+    split_mention_ids = sorted([m_id for m_id, m in mention_map.items() if
+                                m['split'] == split])  # 按train、dev、test分别从当前数据集中读取对应的数据，这里是事件类型为evt的数据
     topic2mentions = {}
     for m_id in split_mention_ids:  # 得到某一主题下的所有mention_id，每个topic对应一个列表，存储该topic下的mention_id
         try:
-            topic = mention_map[m_id]['predicted_topic']   # specifically for the test set of ECB
+            topic = mention_map[m_id]['predicted_topic']  # specifically for the test set of ECB
         except KeyError:
             topic = None
         if not topic:
@@ -268,7 +274,7 @@ def generate_mention_pairs(mention_map, split):
         if topic not in topic2mentions:
             topic2mentions[topic] = []
         topic2mentions[topic].append(m_id)
-# 训练集中有25个topic，每个topic下都分别存储了事件提及id
+    # 训练集中有25个topic，每个topic下都分别存储了事件提及id
     mention_pairs = []  # 在每个主题中构造事件提及对，列表中存储元组[( )]
 
     for mentions in topic2mentions.values():
@@ -311,7 +317,7 @@ def generate_key_file(coref_map_tuples, name, out_dir, out_file_path):
                 clus_to_int[clus_id] = clus_number
                 clus_number += 1
                 clus_int = clus_to_int[clus_id]  # 聚类的索引
-            of.write("%s\t0\t%d\t%s\t(%d)\n" % (name, i, en_id, clus_int)) # 当前事件提及所在的聚类的索引
+            of.write("%s\t0\t%d\t%s\t(%d)\n" % (name, i, en_id, clus_int))  # 当前事件提及所在的聚类的索引
         of.write("#end document\n")
 
 
