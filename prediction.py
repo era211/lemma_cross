@@ -305,6 +305,8 @@ def threshold_ablation():
 
 if __name__ == '__main__':
 
+    ECB = 'ecb'
+    GVC = 'gvc'
     print('tps', 'fps',  'fns')
     # predict('ecb', DEV)
     # predict('ecb', TEST)
@@ -344,3 +346,10 @@ if __name__ == '__main__':
     # save_dpos_scores('gvc', 'dev', dpos_path, heu='lh')
     # threshold_ablation()
     # mention_pair_analysis(dataset, split, heu)
+
+    # LH_ORACLE + D small
+    heu = 'lh_oracle'
+    dpos_path = './ecb_small/'
+    save_dpos_scores(ECB, TEST, dpos_path, heu=heu, text_key='bert_sentence', max_sentence_len=512, long=False)
+    dpos = get_dpos(ECB, heu, TEST)
+    predict_with_dpos(ECB, TEST, dpos, heu=heu)
