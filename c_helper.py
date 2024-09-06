@@ -131,12 +131,20 @@ def tokenize(tokenizer, mention_pairs, mention_map, m_end, max_sentence_len=1024
     c_only_pairwise_bert_instances_ab = []
     c_only_pairwise_bert_instances_ba = []
 
+    e_only_pairwise_ab = []
+    e_only_pairwise_ba = []
+
     doc_start = '<doc-s>'
     doc_end = '</doc-s>'
 
     for (m1, m2) in mention_pairs:
         sentence_a = mention_map[m1][text_key]  # text_key=bert_sentence
         sentence_b = mention_map[m2][text_key]
+        e_only_a = mention_map[m1]['mention_text']
+        e_only_b = mention_map[m2]['mention_text']
+
+        e_only_pairwise_ab.append((e_only_a, e_only_b))
+        e_only_pairwise_ba.append((e_only_b, e_only_a))
 
         def make_instance(sent_a, sent_b):
             return ' '.join(['<g>', doc_start, sent_a, doc_end]), \
@@ -174,15 +182,23 @@ def tokenize(tokenizer, mention_pairs, mention_map, m_end, max_sentence_len=1024
 
         return torch.LongTensor(input_ids_truncated)
 
-    def ab_tokenized(pair_wise_instances):
+    def ab_tokenized(pair_wise_instances, c_only_pairwise_bert_instances, e_only_pairwise):
         instances_a, instances_b = zip(*pair_wise_instances)  # pair_wise_instances列表中保存的都是提及句子对的元组
+        mask_instance_a, mask_instance_b = zip(*c_only_pairwise_bert_instances)
+        e_only_a, e_only_b = zip(*e_only_pairwise)
 
-        tokenized_a = tokenizer(list(instances_a),
-                                add_special_tokens=False)  # 对instance_a中的所有句子进行编码，得到input_ids和attention_mask（句子部分为1）
+        tokenized_a = tokenizer(list(instances_a), add_special_tokens=False)  # 对instance_a中的所有句子进行编码，得到input_ids和attention_mask（句子部分为1）
         tokenized_b = tokenizer(list(instances_b), add_special_tokens=False)
+        c_only_tokenized_a = tokenizer(list(mask_instance_a), add_special_tokens=False, max_length=256, truncation=True)['input_ids']
+        c_only_positions_a = torch.arange(c_only_tokenized_a.shape[-1]).expand(c_only_tokenized_a.shape)
+        c_only_tokenized_b = tokenizer(list(mask_instance_b), add_special_tokens=False, max_length=256, truncation=True)['input_ids']
+        c_only_positions_b = torch.arange(c_only_tokenized_b.shape[-1]).expand(c_only_tokenized_b.shape)
+        e_only_tokenized_a = tokenizer(list(e_only_a), add_special_tokens=False, max_length=256, truncation=True)['input_ids']
+        e_only_positions_a = torch.arange(e_only_tokenized_a.shape[-1]).expand(e_only_tokenized_a.shape)
+        e_only_tokenized_b = tokenizer(list(e_only_b), add_special_tokens=False, max_length=256, truncation=True)['input_ids']
+        e_only_positions_b = torch.arange(e_only_tokenized_b.shape[-1]).expand(e_only_tokenized_b.shape)
 
-        tokenized_a = truncate_with_mentions(tokenized_a[
-                                                 'input_ids'])  # (27928, 256)对tokenizer_a的input_ids中的每个input_id进行截断处理，从end_id所在位置向前向后看512/4步，然后pad到256长度
+        tokenized_a = truncate_with_mentions(tokenized_a['input_ids'])  # (27928, 256)对tokenizer_a的input_ids中的每个input_id进行截断处理，从end_id所在位置向前向后看512/4步，然后pad到256长度
         positions_a = torch.arange(tokenized_a.shape[-1]).expand(tokenized_a.shape)
         tokenized_b = truncate_with_mentions(tokenized_b['input_ids'])
         positions_b = torch.arange(tokenized_b.shape[-1]).expand(tokenized_b.shape)  # (27928, 256)
@@ -190,17 +206,32 @@ def tokenize(tokenizer, mention_pairs, mention_map, m_end, max_sentence_len=1024
         tokenized_ab_ = torch.hstack((tokenized_a, tokenized_b))  # (27928, 256+256)-->(27928, 512)
         positions_ab = torch.hstack((positions_a, positions_b))
 
+        c_only_tokenized_ab = torch.hstack((c_only_tokenized_a, c_only_tokenized_b))
+        c_only_positions_ab = torch.hstack((c_only_positions_a, c_only_positions_b))
+
+        e_only_tokenized_ab = torch.hstack((e_only_tokenized_a, e_only_tokenized_b))
+        e_only_positions_ab = torch.hstack((e_only_positions_a, e_only_positions_b))
+
         tokenized_ab_dict = {'input_ids': tokenized_ab_,
                              'attention_mask': (tokenized_ab_ != tokenizer.pad_token_id),
                              'position_ids': positions_ab
                              }
 
-        return tokenized_ab_dict
+        c_only_tokenized_ab_dict = {'input_ids': c_only_tokenized_ab,
+                                    'attention_mask': (c_only_tokenized_ab != tokenizer.pad_token_id),
+                                    'position_ids': c_only_positions_ab
+                                    }
+
+        e_only_tokenized_ab_dict = {'input_ids': e_only_tokenized_ab,
+                                    'attention_mask': (e_only_tokenized_ab != tokenizer.pad_token_id),
+                                    'position_ids': e_only_positions_ab
+                                    }
+
+        return tokenized_ab_dict, c_only_tokenized_ab_dict, e_only_tokenized_ab_dict
 
     if truncate:
-        tokenized_ab = ab_tokenized(
-            pairwise_bert_instances_ab)  # 得到input_ids、attention_mask、position_ids，在处理过程中，是对两个句子分别处理最后堆叠到一起
-        tokenized_ba = ab_tokenized(pairwise_bert_instances_ba)
+        tokenized_ab, c_only_tokenized_ab, e_only_tokenized_ab = ab_tokenized(pairwise_bert_instances_ab, c_only_pairwise_bert_instances_ab, e_only_pairwise_ab)  # 得到input_ids、attention_mask、position_ids，在处理过程中，是对两个句子分别处理最后堆叠到一起
+        tokenized_ba, c_only_tokenized_ba, e_only_tokenized_ba = ab_tokenized(pairwise_bert_instances_ba, c_only_pairwise_bert_instances_ba, e_only_pairwise_ba)
     else:
         instances_ab = [' '.join(instance) for instance in pairwise_bert_instances_ab]
         instances_ba = [' '.join(instance) for instance in pairwise_bert_instances_ba]
@@ -220,7 +251,7 @@ def tokenize(tokenizer, mention_pairs, mention_map, m_end, max_sentence_len=1024
                         'position_ids': torch.arange(tokenized_ba_input_ids.shape[-1]).expand(
                             tokenized_ba_input_ids.shape)}
 
-    return tokenized_ab, tokenized_ba
+    return tokenized_ab, tokenized_ba, c_only_tokenized_ab, c_only_tokenized_ba, e_only_tokenized_ab, e_only_tokenized_ba
 
 
 def cluster_cc(affinity_matrix, threshold=0.8):

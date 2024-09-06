@@ -137,7 +137,7 @@ def tokenize(tokenizer, mention_pairs, mention_map, m_end, max_sentence_len=1024
     for (m1, m2) in mention_pairs:
         sentence_a = mention_map[m1][text_key]  # text_key=bert_sentence
         sentence_b = mention_map[m2][text_key]
-        
+
         def make_instance(sent_a, sent_b):
             return ' '.join(['<g>', doc_start, sent_a, doc_end]), \
                    ' '.join([doc_start, sent_b, doc_end])
