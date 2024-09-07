@@ -62,9 +62,9 @@ def predict_dpos(parallel_model, c_only_parallel_model, e_only_parallel_model, d
 def predict_trained_model(mention_map, model_name, linear_weights_path, test_pairs, text_key='bert_doc', max_sentence_len=1024, long=True):
     device = torch.device('cuda:0')
     device_ids = list(range(1))
-    model = AutoModel.from_pretrained(model_name)
+    # model = AutoModel.from_pretrained(model_name)
     linear_weights = torch.load(linear_weights_path)
-    scorer_module = CrossEncoder(is_training=False, model=model, long=long,
+    scorer_module = CrossEncoder(is_training=False, model_name=model_name, long=long,
                                       linear_weights=linear_weights).to(device)
     full_parallel_model = torch.nn.DataParallel(scorer_module, device_ids=device_ids)
     full_parallel_model.module.to(device)

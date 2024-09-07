@@ -144,6 +144,7 @@ def train(train_pairs,
 
         print(f'Iteration {n} Loss:', iteration_loss / len(train_pairs))
         # iteration accuracy
+
         dev_scores_ab, dev_scores_ba, c_only_dev_scores_ab, c_only_dev_scores_ba, e_only_dev_scores_ab, e_only_dev_scores_ba = predict_dpos(parallel_model,
                                                                                                                                             c_only_parallel_model,
                                                                                                                                             e_only_parallel_model,
