@@ -86,8 +86,16 @@ def train(train_pairs,
 
     optimizer = torch.optim.AdamW([
         {'params': parallel_model.module.model.parameters(), 'lr': lr_lm},
-        {'params': parallel_model.module.linear.parameters(), 'lr': lr_class},
-        {'params': c_only_parallel_model.module.linear.parameters(), 'lr': lr_class},
+        {'params': parallel_model.module.linear.parameters(), 'lr': lr_class}
+    ])
+
+    c_only_optimizer = torch.optim.AdamW([
+        {'params': c_only_parallel_model.module.model.parameters(), 'lr': lr_lm},
+        {'params': c_only_parallel_model.module.linear.parameters(), 'lr': lr_class}
+    ])
+
+    e_only_optimizer = torch.optim.AdamW([
+        {'params': e_only_parallel_model.module.model.parameters(), 'lr': lr_lm},
         {'params': e_only_parallel_model.module.linear.parameters(), 'lr': lr_class}
     ])
 
@@ -146,6 +154,9 @@ def train(train_pairs,
             loss.backward()
 
             optimizer.step()
+            c_only_optimizer.step()
+            e_only_optimizer.step()
+
 
             iteration_loss += loss.item()
 
