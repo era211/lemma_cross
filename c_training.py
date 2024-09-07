@@ -7,7 +7,7 @@ import random
 from tqdm import tqdm
 import os
 from transformers import AutoModel, AutoTokenizer
-from models import CrossEncoder, COnlyCrossEncoder, EOnlyCrossEncoder
+from c_models import CrossEncoder, COnlyCrossEncoder, EOnlyCrossEncoder
 
 '''添加参数'''
 parser = argparse.ArgumentParser(description='Training a Counterfactual-ECR')

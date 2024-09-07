@@ -5,7 +5,7 @@ from coval.coval.conll.reader import get_coref_infos
 from coval.coval.eval.evaluator import evaluate_documents as evaluate
 from coval.coval.eval.evaluator import muc, b_cubed, ceafe, lea
 import torch
-from models import CrossEncoder
+from c_models import CrossEncoder
 from tqdm import tqdm
 from heuristic import lh_split
 from c_helper import cluster
