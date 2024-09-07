@@ -30,11 +30,10 @@ def train_dpos(dataset, model_name=None, PLM=None, device=None):
     dev_labels = [1] * len(tps_dev) + [0] * len(fps_dev)
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModel.from_pretrained(model_name)
     # model_name = 'roberta-base'
-    full_scorer_module = CrossEncoder(is_training=True, tokenizer=tokenizer, model=model).to(device)
-    c_only_scorer_module = COnlyCrossEncoder(is_training=True, tokenizer=tokenizer, model=model).to(device)
-    e_only_scorer_module = EOnlyCrossEncoder(is_training=True, tokenizer=tokenizer, model=model).to(device)
+    full_scorer_module = CrossEncoder(is_training=True, tokenizer=tokenizer, model_name=model_name).to(device)
+    c_only_scorer_module = COnlyCrossEncoder(is_training=True, tokenizer=tokenizer, model_name=model_name).to(device)
+    e_only_scorer_module = EOnlyCrossEncoder(is_training=True, tokenizer=tokenizer, model_name=model_name).to(device)
 
     full_parallel_model = torch.nn.DataParallel(full_scorer_module, device_ids=device_ids)
     full_parallel_model.module.to(device)

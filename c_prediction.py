@@ -66,19 +66,31 @@ def predict_trained_model(mention_map, model_name, linear_weights_path, test_pai
     linear_weights = torch.load(linear_weights_path)
     scorer_module = CrossEncoder(is_training=False, model=model, long=long,
                                       linear_weights=linear_weights).to(device)
-    parallel_model = torch.nn.DataParallel(scorer_module, device_ids=device_ids)
-    parallel_model.module.to(device)
+    full_parallel_model = torch.nn.DataParallel(scorer_module, device_ids=device_ids)
+    full_parallel_model.module.to(device)
+
+    c_only_parallel_model = torch.nn.DataParallel(c_only_scorer_module, device_ids=device_ids)
+    c_only_parallel_model.module.to(device)
+
+    e_only_parallel_model = torch.nn.DataParallel(e_only_scorer_module, device_ids=device_ids)
+    e_only_parallel_model.module.to(device)
 
 
 
-    tokenizer = parallel_model.module.tokenizer
+    tokenizer = full_parallel_model.module.tokenizer
     # prepare data
     test_ab, test_ba, c_only_test_ab, c_only_test_ba, e_only_test_ab, e_only_test_ba = tokenize(tokenizer, test_pairs,
                                                                                           mention_map,
-                                                                                          parallel_model.module.end_id,
+                                                                                          full_parallel_model.module.end_id,
                                                                                           text_key=text_key,
                                                                                           max_sentence_len=max_sentence_len)
-    test_scores_ab, test_scores_ba, c_only_test_scores_ab, c_only_test_scores_ba, e_only_test_scores_ab, e_only_test_scores_ba  = predict_dpos(parallel_model, c_only_parallel_model, e_only_parallel_model, test_ab, test_ba, c_only_test_ab, c_only_test_ba, e_only_test_ab, e_only_test_ba, device, batch_size=64)
+    test_scores_ab, test_scores_ba, c_only_test_scores_ab, c_only_test_scores_ba, e_only_test_scores_ab, e_only_test_scores_ba  = predict_dpos(full_parallel_model,
+                                                                                                                                               c_only_parallel_model,
+                                                                                                                                               e_only_parallel_model,
+                                                                                                                                               test_ab, test_ba,
+                                                                                                                                               c_only_test_ab, c_only_test_ba,
+                                                                                                                                               e_only_test_ab, e_only_test_ba,
+                                                                                                                                               device, batch_size=64)
 
     return test_scores_ab, test_scores_ba, c_only_test_scores_ab, c_only_test_scores_ba, e_only_test_scores_ab, e_only_test_scores_ba, test_pairs
 
