@@ -120,39 +120,37 @@ def forward_ab(parallel_model, ab_dict, device, indices, lm_only=False):
     return parallel_model(batch_tensor_ab, attention_mask=batch_am_ab, position_ids=batch_posits_ab,
                           global_attention_mask=am_g_ab, arg1=arg1_ab, arg2=arg2_ab, lm_only=lm_only)
 
-def c_only_forward_ab(parallel_model, ab_dict, device, indices, lm_only=False):
+def c_only_forward_ab(c_only_parallel_model, ab_dict, device, indices, lm_only=False):
     batch_tensor_ab = ab_dict['input_ids'][indices, :]
     batch_am_ab = ab_dict['attention_mask'][indices, :]
     batch_posits_ab = ab_dict['position_ids'][indices, :]
-    am_g_ab, arg1_ab, arg2_ab = get_arg_attention_mask(batch_tensor_ab, parallel_model)
+    # am_g_ab, arg1_ab, arg2_ab = get_arg_attention_mask(batch_tensor_ab, c_only_parallel_model)
+
+    # 获取 <mask> token 的 ID
+    mask_token_id = c_only_parallel_model.module.tokenizer.mask_token_id
+    # 生成 mask_attention: 如果 token 不是 <mask>，则为 1，否则为 0
+    mask_attention = (batch_tensor_ab != mask_token_id).long()
 
     batch_tensor_ab.to(device)
     batch_am_ab.to(device)
     batch_posits_ab.to(device)
-    if am_g_ab is not None:
-        am_g_ab.to(device)
-    arg1_ab.to(device)
-    arg2_ab.to(device)
+    if mask_attention is not None:
+        mask_attention.to(device)
 
-    return parallel_model(batch_tensor_ab, attention_mask=batch_am_ab, position_ids=batch_posits_ab,
-                          global_attention_mask=am_g_ab, arg1=arg1_ab, arg2=arg2_ab, lm_only=lm_only)
+    return c_only_parallel_model(batch_tensor_ab, attention_mask=batch_am_ab, position_ids=batch_posits_ab,
+                          global_attention_mask=mask_attention, lm_only=lm_only)
 
-def e_only_forward_ab(parallel_model, ab_dict, device, indices, lm_only=False):
+def e_only_forward_ab(e_only_parallel_model, ab_dict, device, indices, lm_only=False):
     batch_tensor_ab = ab_dict['input_ids'][indices, :]
     batch_am_ab = ab_dict['attention_mask'][indices, :]
     batch_posits_ab = ab_dict['position_ids'][indices, :]
-    am_g_ab, arg1_ab, arg2_ab = get_arg_attention_mask(batch_tensor_ab, parallel_model)
+    # am_g_ab, arg1_ab, arg2_ab = get_arg_attention_mask(batch_tensor_ab, e_only_parallel_model)
 
     batch_tensor_ab.to(device)
     batch_am_ab.to(device)
     batch_posits_ab.to(device)
-    if am_g_ab is not None:
-        am_g_ab.to(device)
-    arg1_ab.to(device)
-    arg2_ab.to(device)
 
-    return parallel_model(batch_tensor_ab, attention_mask=batch_am_ab, position_ids=batch_posits_ab,
-                          global_attention_mask=am_g_ab, arg1=arg1_ab, arg2=arg2_ab, lm_only=lm_only)
+    return e_only_parallel_model(batch_tensor_ab, attention_mask=batch_am_ab, position_ids=batch_posits_ab, lm_only=lm_only)
 
 def tokenize(tokenizer, mention_pairs, mention_map, m_end, max_sentence_len=1024, text_key='bert_doc', truncate=True):
     if max_sentence_len is None:
@@ -222,13 +220,19 @@ def tokenize(tokenizer, mention_pairs, mention_map, m_end, max_sentence_len=1024
 
         tokenized_a = tokenizer(list(instances_a), add_special_tokens=False)  # 对instance_a中的所有句子进行编码，得到input_ids和attention_mask（句子部分为1）
         tokenized_b = tokenizer(list(instances_b), add_special_tokens=False)
-        c_only_tokenized_a = tokenizer(list(mask_instance_a), add_special_tokens=False, max_length=256, truncation=True)['input_ids']
+
+        c_only_tokenized_a = tokenizer(list(mask_instance_a), add_special_tokens=False, max_length=256, truncation=True, padding='max_length')['input_ids']
+        c_only_tokenized_a = torch.LongTensor(c_only_tokenized_a)
         c_only_positions_a = torch.arange(c_only_tokenized_a.shape[-1]).expand(c_only_tokenized_a.shape)
-        c_only_tokenized_b = tokenizer(list(mask_instance_b), add_special_tokens=False, max_length=256, truncation=True)['input_ids']
+        c_only_tokenized_b = tokenizer(list(mask_instance_b), add_special_tokens=False, max_length=256, truncation=True, padding='max_length')['input_ids']
+        c_only_tokenized_b = torch.LongTensor(c_only_tokenized_b)
         c_only_positions_b = torch.arange(c_only_tokenized_b.shape[-1]).expand(c_only_tokenized_b.shape)
-        e_only_tokenized_a = tokenizer(list(e_only_a), add_special_tokens=False, max_length=256, truncation=True)['input_ids']
+
+        e_only_tokenized_a = tokenizer(list(e_only_a), add_special_tokens=False, max_length=256, truncation=True, padding='max_length')['input_ids']
+        e_only_tokenized_a = torch.LongTensor(e_only_tokenized_a)
         e_only_positions_a = torch.arange(e_only_tokenized_a.shape[-1]).expand(e_only_tokenized_a.shape)
-        e_only_tokenized_b = tokenizer(list(e_only_b), add_special_tokens=False, max_length=256, truncation=True)['input_ids']
+        e_only_tokenized_b = tokenizer(list(e_only_b), add_special_tokens=False, max_length=256, truncation=True, padding='max_length')['input_ids']
+        e_only_tokenized_b = torch.LongTensor(e_only_tokenized_b)
         e_only_positions_b = torch.arange(e_only_tokenized_b.shape[-1]).expand(e_only_tokenized_b.shape)
 
         tokenized_a = truncate_with_mentions(tokenized_a['input_ids'])  # (27928, 256)对tokenizer_a的input_ids中的每个input_id进行截断处理，从end_id所在位置向前向后看512/4步，然后pad到256长度

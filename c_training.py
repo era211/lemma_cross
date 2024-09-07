@@ -6,7 +6,7 @@ from c_prediction import predict_dpos
 import random
 from tqdm import tqdm
 import os
-from models import CrossEncoder
+from models import CrossEncoder, COnlyCrossEncoder, EOnlyCrossEncoder
 
 '''添加参数'''
 parser = argparse.ArgumentParser(description='Training a Counterfactual-ECR')
@@ -47,11 +47,20 @@ def train_dpos(dataset, model_name=None, PLM=None, device=None):
     dev_labels = [1] * len(tps_dev) + [0] * len(fps_dev)
 
     # model_name = 'roberta-base'
-    scorer_module = CrossEncoder(is_training=True, model_name=model_name).to(device)
+    full_scorer_module = CrossEncoder(is_training=True, model_name=model_name).to(device)
+    c_only_scorer_module = COnlyCrossEncoder(is_training=True, model_name=model_name).to(device)
+    e_only_scorer_module = EOnlyCrossEncoder(is_training=True, model_name=model_name).to(device)
 
-    parallel_model = torch.nn.DataParallel(scorer_module, device_ids=device_ids)
-    parallel_model.module.to(device)
-    train(train_pairs, train_labels, dev_pairs, dev_labels, parallel_model, evt_mention_map, dataset_folder, device, PLM,
+    full_parallel_model = torch.nn.DataParallel(full_scorer_module, device_ids=device_ids)
+    full_parallel_model.module.to(device)
+
+    c_only_parallel_model = torch.nn.DataParallel(full_scorer_module, device_ids=device_ids)
+    c_only_parallel_model.module.to(device)
+
+    e_only_parallel_model = torch.nn.DataParallel(full_scorer_module, device_ids=device_ids)
+    e_only_parallel_model.module.to(device)
+
+    train(train_pairs, train_labels, dev_pairs, dev_labels, full_parallel_model, c_only_parallel_model, e_only_parallel_model, evt_mention_map, dataset_folder, device, PLM,
           batch_size=args.batch_size, n_iters=args.epoch, lr_lm=args.lr_lm, lr_class=args.lr_class)
 
 
@@ -60,6 +69,8 @@ def train(train_pairs,
           dev_pairs,
           dev_labels,
           parallel_model,
+          c_only_parallel_model,
+          e_only_parallel_model,
           mention_map,
           working_folder,
           device,
@@ -73,7 +84,11 @@ def train(train_pairs,
 
     optimizer = torch.optim.AdamW([
         {'params': parallel_model.module.model.parameters(), 'lr': lr_lm},
-        {'params': parallel_model.module.linear.parameters(), 'lr': lr_class}
+        {'params': parallel_model.module.linear.parameters(), 'lr': lr_class},
+        {'params': c_only_parallel_model.module.model.parameters(), 'lr': lr_lm},
+        {'params': c_only_parallel_model.module.linear.parameters(), 'lr': lr_class},
+        {'params': e_only_parallel_model.module.model.parameters(), 'lr': lr_lm},
+        {'params': e_only_parallel_model.module.linear.parameters(), 'lr': lr_class}
     ])
 
     # all_examples = load_easy_hard_data(trivial_non_trivial_path)
@@ -110,16 +125,16 @@ def train(train_pairs,
                 full_loss = 0.0
 
             if args.c_only:
-                c_only_scores_ab = c_only_forward_ab(parallel_model, c_only_train_ab, device, batch_indices)
-                c_only_scores_ba = c_only_forward_ab(parallel_model, c_only_train_ba, device, batch_indices)
+                c_only_scores_ab = c_only_forward_ab(c_only_parallel_model, c_only_train_ab, device, batch_indices)
+                c_only_scores_ba = c_only_forward_ab(c_only_parallel_model, c_only_train_ba, device, batch_indices)
                 c_only_scores_mean = (c_only_scores_ab + c_only_scores_ba) / 2
                 c_only_loss = bce_loss(c_only_scores_mean, batch_labels)
             else:
                 c_only_loss = 0.0
 
             if args.e_only:
-                e_only_scores_ab = e_only_forward_ab(parallel_model, e_only_train_ab, device, batch_indices)
-                e_only_scores_ba = e_only_forward_ab(parallel_model, e_only_train_ba, device, batch_indices)
+                e_only_scores_ab = e_only_forward_ab(e_only_parallel_model, e_only_train_ab, device, batch_indices)
+                e_only_scores_ba = e_only_forward_ab(e_only_parallel_model, e_only_train_ba, device, batch_indices)
                 e_only_scores_mean = (e_only_scores_ab + e_only_scores_ba) / 2
                 e_only_loss = bce_loss(e_only_scores_mean, batch_labels)
             else:
