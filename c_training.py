@@ -1,31 +1,14 @@
 import pickle
 import torch
-import argparse
-from c_helper import tokenize, forward_ab, c_only_forward_ab, e_only_forward_ab, f1_score, accuracy, precision, recall
+from c_helper import tokenize, forward_ab, c_only_forward_ab, e_only_forward_ab, f1_score, accuracy, precision, recall, save_parameters
 from c_prediction import predict_dpos
 import random
 from tqdm import tqdm
 import os
 from transformers import AutoModel, AutoTokenizer
 from c_models import CrossEncoder, COnlyCrossEncoder, EOnlyCrossEncoder
+from argument import args
 
-'''添加参数'''
-parser = argparse.ArgumentParser(description='Training a Counterfactual-ECR')
-parser.add_argument('--gpu_num', type=int, default=0, help=' A single GPU number')
-parser.add_argument('--model_name', type=str, default='/root/lanyun-tmp/roberta-base', help='roberta-base')
-parser.add_argument('--PLM', type=str, default='small', help='small or long')
-parser.add_argument('--full', type=bool, default=True, help='event and context')
-parser.add_argument('--c_only', type=bool, default=True, help='only context')
-parser.add_argument('--e_only', type=bool, default=True, help='only event')
-parser.add_argument('--batch_size', default=16, type=int, help='batch size')
-parser.add_argument('--epoch', default=10, type=int, help='epoch')
-parser.add_argument('--lr_lm', default=0.000001, type=float, help='learning rate')
-parser.add_argument('--lr_class', default=0.0001, type=float, help='linear_learning rate')
-parser.add_argument('--l_alpha', default=0.25, type=float)
-parser.add_argument('--l_beta', default=0.25, type=float)
-parser.add_argument('--alpha', default=0.15, type=float)
-parser.add_argument('--beta', default=0.15, type=float)
-args = parser.parse_args()
 
 def train_dpos(dataset, model_name=None, PLM=None, device=None):
     dataset_folder = f'./datasets/{dataset}/'
@@ -185,32 +168,31 @@ def train(train_pairs,
         dev_f1 = f1_score(dev_predictions, dev_labels)
         if dev_f1 > f1:
             f1 = dev_f1
-            scorer_folder = working_folder + PLM + '/best_f1_scorer/'
+            scorer_folder = working_folder + PLM + '/scorer/best_f1_scorer/'
             if not os.path.exists(scorer_folder):
                 os.makedirs(scorer_folder)
-            model_path = scorer_folder + '/linear.chkpt'
-            torch.save(parallel_model.module.linear.state_dict(), model_path)
-            parallel_model.module.model.save_pretrained(scorer_folder + '/bert')
-            parallel_model.module.tokenizer.save_pretrained(scorer_folder + '/bert')
-            print(f'saved best f1 model')
+
+            save_parameters(scorer_folder, parallel_model, c_only_parallel_model, e_only_parallel_model)
+
+            print(f'\nsaved best f1 model\n')
 
         if n % 2 == 0:
             scorer_folder = working_folder + PLM + f'/scorer/chk_{n}'
             if not os.path.exists(scorer_folder):
                 os.makedirs(scorer_folder)
-            model_path = scorer_folder + '/linear.chkpt'
-            torch.save(parallel_model.module.linear.state_dict(), model_path)
-            parallel_model.module.model.save_pretrained(scorer_folder + '/bert')
-            parallel_model.module.tokenizer.save_pretrained(scorer_folder + '/bert')
+
+            save_parameters(scorer_folder, parallel_model, c_only_parallel_model, e_only_parallel_model)
+
             print(f'saved model at {n}')
 
-    scorer_folder = working_folder + PLM + '/scorer/'
+
+    scorer_folder = working_folder + PLM + '/scorer/final/'
     if not os.path.exists(scorer_folder):
         os.makedirs(scorer_folder)
-    model_path = scorer_folder + '/linear.chkpt'
-    torch.save(parallel_model.module.linear.state_dict(), model_path)
-    parallel_model.module.model.save_pretrained(scorer_folder + '/bert')
-    parallel_model.module.tokenizer.save_pretrained(scorer_folder + '/bert')
+
+    save_parameters(scorer_folder, parallel_model, c_only_parallel_model, e_only_parallel_model)
+
+    print('\nsaved final model\n')
 
 
 if __name__ == '__main__':

@@ -1,3 +1,4 @@
+from transformers import AutoModel
 from c_helper import *
 import pickle
 import numpy as np
@@ -12,6 +13,7 @@ from c_helper import cluster
 torch.backends.cuda.matmul.allow_tf32 = False
 torch.backends.cudnn.allow_tf32 = False
 import pandas as pd
+from argument import args
 
 
 def read(key, response):
@@ -60,20 +62,25 @@ def predict_dpos(parallel_model, c_only_parallel_model, e_only_parallel_model, d
 def predict_trained_model(mention_map, model_name, linear_weights_path, test_pairs, text_key='bert_doc', max_sentence_len=1024, long=True):
     device = torch.device('cuda:0')
     device_ids = list(range(1))
+    model = AutoModel.from_pretrained(model_name)
     linear_weights = torch.load(linear_weights_path)
-    scorer_module = CrossEncoder(is_training=False, model_name=model_name, long=long,
+    scorer_module = CrossEncoder(is_training=False, model=model, long=long,
                                       linear_weights=linear_weights).to(device)
     parallel_model = torch.nn.DataParallel(scorer_module, device_ids=device_ids)
     parallel_model.module.to(device)
 
+
+
     tokenizer = parallel_model.module.tokenizer
     # prepare data
+    test_ab, test_ba, c_only_test_ab, c_only_test_ba, e_only_test_ab, e_only_test_ba = tokenize(tokenizer, test_pairs,
+                                                                                          mention_map,
+                                                                                          parallel_model.module.end_id,
+                                                                                          text_key=text_key,
+                                                                                          max_sentence_len=max_sentence_len)
+    test_scores_ab, test_scores_ba, c_only_test_scores_ab, c_only_test_scores_ba, e_only_test_scores_ab, e_only_test_scores_ba  = predict_dpos(parallel_model, c_only_parallel_model, e_only_parallel_model, test_ab, test_ba, c_only_test_ab, c_only_test_ba, e_only_test_ab, e_only_test_ba, device, batch_size=64)
 
-    test_ab, test_ba = tokenize(tokenizer, test_pairs, mention_map, parallel_model.module.end_id, text_key=text_key, max_sentence_len=max_sentence_len)
-
-    scores_ab, scores_ba = predict_dpos(parallel_model, test_ab, test_ba, device, batch_size=64)
-
-    return scores_ab, scores_ba, test_pairs
+    return test_scores_ab, test_scores_ba, c_only_test_scores_ab, c_only_test_scores_ba, e_only_test_scores_ab, e_only_test_scores_ba, test_pairs
 
 
 def save_dpos_scores(dataset, split, dpos_folder, heu='lh', threshold=0.999, text_key='bert_doc', max_sentence_len=1024, long=True):
@@ -95,9 +102,12 @@ def save_dpos_scores(dataset, split, dpos_folder, heu='lh', threshold=0.999, tex
     linear_weights_path = dpos_folder + "/linear.chkpt"
     bert_path = dpos_folder + '/bert'
 
-    scores_ab, scores_ba, pairs = predict_trained_model(evt_mention_map, bert_path, linear_weights_path, test_pairs, text_key, max_sentence_len, long=True)
+    test_scores_ab, test_scores_ba, c_only_test_scores_ab, c_only_test_scores_ba, e_only_test_scores_ab, e_only_test_scores_ba, pairs = predict_trained_model(evt_mention_map, bert_path, linear_weights_path, test_pairs, text_key, max_sentence_len, long=True)
 
-    predictions = (scores_ab + scores_ba)/2
+    full_test_predictions = (test_scores_ab + test_scores_ba) / 2
+    c_only_test_predictions = (c_only_test_scores_ab + c_only_test_scores_ba) / 2
+    e_only_test_predictions = (e_only_test_scores_ab + e_only_test_scores_ba) / 2
+    predictions = full_test_predictions - args.alpha * c_only_test_predictions - args.beta * e_only_test_predictions
 
     predictions = torch.squeeze(predictions) > threshold
 
@@ -109,8 +119,8 @@ def save_dpos_scores(dataset, split, dpos_folder, heu='lh', threshold=0.999, tex
     print("Test f1:", f1_score(predictions, test_labels))
 
     pickle.dump(test_pairs, open(dataset_folder + f'/dpos/{split}_{heu}_pairs.pkl', 'wb'))
-    pickle.dump(scores_ab, open(dataset_folder + f'/dpos/{split}_{heu}_scores_ab.pkl', 'wb'))
-    pickle.dump(scores_ba, open(dataset_folder + f'/dpos/{split}_{heu}_scores_ba.pkl', 'wb'))
+    pickle.dump(test_scores_ab, open(dataset_folder + f'/dpos/{split}_{heu}_scores_ab.pkl', 'wb'))
+    pickle.dump(test_scores_ba, open(dataset_folder + f'/dpos/{split}_{heu}_scores_ba.pkl', 'wb'))
 
 
 def get_cluster_scores(dataset_folder, evt_mention_map, all_mention_pairs, dataset, split, heu, similarities, dpos_score_map, out_name, threshold):
@@ -367,8 +377,8 @@ if __name__ == '__main__':
     # threshold_ablation()
     # mention_pair_analysis(dataset, split, heu)
 
-    # LH_ORACLE + D small
-    heu = 'lh_oracle'
+    # LH + D small
+    heu = 'lh'
     dpos_path = './ecb_small/'
     save_dpos_scores(ECB, TEST, dpos_path, heu=heu, text_key='bert_sentence', max_sentence_len=512, long=False)
     dpos = get_dpos(ECB, heu, TEST)

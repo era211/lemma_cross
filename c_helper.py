@@ -434,3 +434,20 @@ def f1_score(predicted_labels, true_labels):
     P = precision(predicted_labels, true_labels)
     R = recall(predicted_labels, true_labels)
     return 2 * P * R / (P + R)
+
+
+def save_parameters(scorer_folder, parallel_model, c_only_parallel_model, e_only_parallel_model):
+    model_path = scorer_folder + '/f_CrossEncoder/' + '/linear.chkpt'
+    torch.save(parallel_model.module.linear.state_dict(), model_path)
+    parallel_model.module.model.save_pretrained(scorer_folder + '/f_CrossEncoder/' + '/bert')
+    parallel_model.module.tokenizer.save_pretrained(scorer_folder + '/f_CrossEncoder/' + '/bert')
+
+    model_path_c_only = scorer_folder + '/c_only_CrossEncoder/' + '/linear.chkpt'
+    torch.save(c_only_parallel_model.module.linear.state_dict(), model_path_c_only)
+    c_only_parallel_model.module.model.save_pretrained(scorer_folder + '/c_only_CrossEncoder/' + '/bert')
+    c_only_parallel_model.module.tokenizer.save_pretrained(scorer_folder + '/c_only_CrossEncoder/' + '/bert')
+
+    model_path_c_only = scorer_folder + '/e_only_CrossEncoder/' + '/linear.chkpt'
+    torch.save(e_only_parallel_model.module.linear.state_dict(), model_path_c_only)
+    e_only_parallel_model.module.model.save_pretrained(scorer_folder + '/e_only_CrossEncoder/' + '/bert')
+    e_only_parallel_model.module.tokenizer.save_pretrained(scorer_folder + '/e_only_CrossEncoder/' + '/bert')
