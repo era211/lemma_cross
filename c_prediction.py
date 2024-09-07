@@ -19,7 +19,7 @@ def read(key, response):
             False, False, True)
 
 
-def predict_dpos(parallel_model, dev_ab, dev_ba, c_only_dev_ab, c_only_dev_ba, e_only_dev_ab, e_only_dev_ba, device, batch_size):
+def predict_dpos(parallel_model, c_only_parallel_model, e_only_parallel_model, dev_ab, dev_ba, c_only_dev_ab, c_only_dev_ba, e_only_dev_ab, e_only_dev_ba, device, batch_size):
     n = dev_ab['input_ids'].shape[0]
     indices = list(range(n))
     # new_batch_size = batching(n, batch_size, len(device_ids))
@@ -39,11 +39,11 @@ def predict_dpos(parallel_model, dev_ab, dev_ba, c_only_dev_ab, c_only_dev_ba, e
             scores_ab = forward_ab(parallel_model, dev_ab, device, batch_indices)
             scores_ba = forward_ab(parallel_model, dev_ba, device, batch_indices)
 
-            c_only_scores_ab = c_only_forward_ab(parallel_model, c_only_dev_ab, device, batch_indices)
-            c_only_scores_ba = c_only_forward_ab(parallel_model, c_only_dev_ba, device, batch_indices)
+            c_only_scores_ab = c_only_forward_ab(c_only_parallel_model, c_only_dev_ab, device, batch_indices)
+            c_only_scores_ba = c_only_forward_ab(c_only_parallel_model, c_only_dev_ba, device, batch_indices)
 
-            e_only_scores_ab = e_only_forward_ab(parallel_model, e_only_dev_ab, device, batch_indices)
-            e_only_scores_ba = e_only_forward_ab(parallel_model, e_only_dev_ba, device, batch_indices)
+            e_only_scores_ab = e_only_forward_ab(e_only_parallel_model, e_only_dev_ab, device, batch_indices)
+            e_only_scores_ba = e_only_forward_ab(e_only_parallel_model, e_only_dev_ba, device, batch_indices)
 
             all_scores_ab.append(scores_ab.detach().cpu())
             all_scores_ba.append(scores_ba.detach().cpu())

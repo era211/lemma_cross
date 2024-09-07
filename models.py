@@ -8,8 +8,6 @@ from inspect import getfullargspec
 
 # relative path of config file
 
-model_name='/home/yaolong/PT_MODELS/PT_MODELS/roberta-base'
-tokenizer = AutoTokenizer.from_pretrained(model_name)
 
 def init_weights(m):
     if isinstance(m, nn.Linear):
@@ -18,7 +16,7 @@ def init_weights(m):
 
 
 class CrossEncoder(nn.Module):
-    def __init__(self, is_training=True, long=True, tokenizer=tokenizer,
+    def __init__(self, is_training=True, long=True, tokenizer=None, model=None,
                  linear_weights=None):
         super(CrossEncoder, self).__init__()
         self.tokenizer = tokenizer
@@ -28,10 +26,10 @@ class CrossEncoder(nn.Module):
             self.tokenizer.add_tokens(['<m>', '</m>'], special_tokens=True)
             self.tokenizer.add_tokens(['<doc-s>', '</doc-s>'], special_tokens=True)
             self.tokenizer.add_tokens(['<g>'], special_tokens=True)
-            self.model = AutoModel.from_pretrained(model_name)
+            self.model = model
             self.model.resize_token_embeddings(len(self.tokenizer))
         else:
-            self.model = AutoModel.from_pretrained(model_name)
+            self.model = model
 
         self.start_id = self.tokenizer.encode('<m>', add_special_tokens=False)[0]  # 将<m>转换为token ID
         self.end_id = self.tokenizer.encode('</m>', add_special_tokens=False)[0]  # 将</m>转换为token ID
@@ -110,7 +108,7 @@ class CrossEncoder(nn.Module):
 
 
 class COnlyCrossEncoder(nn.Module):
-    def __init__(self, is_training=True, long=True, tokenizer=tokenizer,
+    def __init__(self, is_training=True, long=True, tokenizer=None, model=None,
                  linear_weights=None):
         super(COnlyCrossEncoder, self).__init__()
         self.tokenizer = tokenizer
@@ -120,10 +118,10 @@ class COnlyCrossEncoder(nn.Module):
             self.tokenizer.add_tokens(['<m>', '</m>'], special_tokens=True)
             self.tokenizer.add_tokens(['<doc-s>', '</doc-s>'], special_tokens=True)
             self.tokenizer.add_tokens(['<g>'], special_tokens=True)
-            self.model = AutoModel.from_pretrained(model_name)
+            self.model = model
             self.model.resize_token_embeddings(len(self.tokenizer))
         else:
-            self.model = AutoModel.from_pretrained(model_name)
+            self.model = model
 
         self.start_id = self.tokenizer.encode('<m>', add_special_tokens=False)[0]  # 将<m>转换为token ID
         self.end_id = self.tokenizer.encode('</m>', add_special_tokens=False)[0]  # 将</m>转换为token ID
@@ -192,7 +190,7 @@ class COnlyCrossEncoder(nn.Module):
 
 
 class EOnlyCrossEncoder(nn.Module):
-    def __init__(self, is_training=True, long=True, tokenizer=tokenizer,
+    def __init__(self, is_training=True, long=True, tokenizer=None, model=None,
                  linear_weights=None):
         super(EOnlyCrossEncoder, self).__init__()
         self.tokenizer = tokenizer
@@ -202,10 +200,10 @@ class EOnlyCrossEncoder(nn.Module):
             self.tokenizer.add_tokens(['<m>', '</m>'], special_tokens=True)
             self.tokenizer.add_tokens(['<doc-s>', '</doc-s>'], special_tokens=True)
             self.tokenizer.add_tokens(['<g>'], special_tokens=True)
-            self.model = AutoModel.from_pretrained(model_name)
+            self.model = model
             self.model.resize_token_embeddings(len(self.tokenizer))
         else:
-            self.model = AutoModel.from_pretrained(model_name)
+            self.model = model
 
         self.start_id = self.tokenizer.encode('<m>', add_special_tokens=False)[0]  # 将<m>转换为token ID
         self.end_id = self.tokenizer.encode('</m>', add_special_tokens=False)[0]  # 将</m>转换为token ID

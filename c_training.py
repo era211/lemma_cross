@@ -6,6 +6,7 @@ from c_prediction import predict_dpos
 import random
 from tqdm import tqdm
 import os
+from transformers import AutoModel, AutoTokenizer
 from models import CrossEncoder, COnlyCrossEncoder, EOnlyCrossEncoder
 
 '''添加参数'''
@@ -30,9 +31,8 @@ def train_dpos(dataset, model_name=None, PLM=None, device=None):
     dataset_folder = f'./datasets/{dataset}/'
     mention_map = pickle.load(open(dataset_folder + "/mention_map.pkl", 'rb'))
     evt_mention_map = {m_id: m for m_id, m in mention_map.items() if m['men_type'] == 'evt'}
-
     device = torch.device(device)
-    device_ids = [device]
+    device_ids = [0, 1]
     # device_ids = list(range(1))
     train_mp_mpt, _ = pickle.load(open(dataset_folder + '/lh/mp_mp_t_train.pkl', 'rb'))
     dev_mp_mpt, _ = pickle.load(open(dataset_folder + '/lh/mp_mp_t_dev.pkl', 'rb'))
@@ -46,18 +46,20 @@ def train_dpos(dataset, model_name=None, PLM=None, device=None):
     dev_pairs = list(tps_dev + fps_dev)
     dev_labels = [1] * len(tps_dev) + [0] * len(fps_dev)
 
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModel.from_pretrained(model_name)
     # model_name = 'roberta-base'
-    full_scorer_module = CrossEncoder(is_training=True, model_name=model_name).to(device)
-    c_only_scorer_module = COnlyCrossEncoder(is_training=True, model_name=model_name).to(device)
-    e_only_scorer_module = EOnlyCrossEncoder(is_training=True, model_name=model_name).to(device)
+    full_scorer_module = CrossEncoder(is_training=True, tokenizer=tokenizer, model=model).to(device)
+    c_only_scorer_module = COnlyCrossEncoder(is_training=True, tokenizer=tokenizer, model=model).to(device)
+    e_only_scorer_module = EOnlyCrossEncoder(is_training=True, tokenizer=tokenizer, model=model).to(device)
 
     full_parallel_model = torch.nn.DataParallel(full_scorer_module, device_ids=device_ids)
     full_parallel_model.module.to(device)
 
-    c_only_parallel_model = torch.nn.DataParallel(full_scorer_module, device_ids=device_ids)
+    c_only_parallel_model = torch.nn.DataParallel(c_only_scorer_module, device_ids=device_ids)
     c_only_parallel_model.module.to(device)
 
-    e_only_parallel_model = torch.nn.DataParallel(full_scorer_module, device_ids=device_ids)
+    e_only_parallel_model = torch.nn.DataParallel(e_only_scorer_module, device_ids=device_ids)
     e_only_parallel_model.module.to(device)
 
     train(train_pairs, train_labels, dev_pairs, dev_labels, full_parallel_model, c_only_parallel_model, e_only_parallel_model, evt_mention_map, dataset_folder, device, PLM,
@@ -85,9 +87,7 @@ def train(train_pairs,
     optimizer = torch.optim.AdamW([
         {'params': parallel_model.module.model.parameters(), 'lr': lr_lm},
         {'params': parallel_model.module.linear.parameters(), 'lr': lr_class},
-        {'params': c_only_parallel_model.module.model.parameters(), 'lr': lr_lm},
         {'params': c_only_parallel_model.module.linear.parameters(), 'lr': lr_class},
-        {'params': e_only_parallel_model.module.model.parameters(), 'lr': lr_lm},
         {'params': e_only_parallel_model.module.linear.parameters(), 'lr': lr_class}
     ])
 
@@ -152,6 +152,8 @@ def train(train_pairs,
         print(f'Iteration {n} Loss:', iteration_loss / len(train_pairs))
         # iteration accuracy
         dev_scores_ab, dev_scores_ba, c_only_dev_scores_ab, c_only_dev_scores_ba, e_only_dev_scores_ab, e_only_dev_scores_ba = predict_dpos(parallel_model,
+                                                                                                                                            c_only_parallel_model,
+                                                                                                                                            e_only_parallel_model,
                                                                                                                                             dev_ab, dev_ba,
                                                                                                                                             c_only_dev_ab, c_only_dev_ba,
                                                                                                                                             e_only_dev_ab, e_only_dev_ba,
