@@ -1,12 +1,30 @@
 import pickle
 import torch
-from c_helper import tokenize, forward_ab, f1_score, accuracy, precision, recall
-from prediction import predict_dpos
+import argparse
+from c_helper import tokenize, forward_ab, c_only_forward_ab, e_only_forward_ab, f1_score, accuracy, precision, recall
+from c_prediction import predict_dpos
 import random
 from tqdm import tqdm
 import os
 from models import CrossEncoder
 
+'''添加参数'''
+parser = argparse.ArgumentParser(description='Training a Counterfactual-ECR')
+parser.add_argument('--gpu_num', type=int, default=0, help=' A single GPU number')
+parser.add_argument('--model_name', type=str, default='/root/lanyun-tmp/roberta-base', help='roberta-base')
+parser.add_argument('--PLM', type=str, default='small', help='small or long')
+parser.add_argument('--full', type=bool, default=True, help='event and context')
+parser.add_argument('--c_only', type=bool, default=True, help='only context')
+parser.add_argument('--e_only', type=bool, default=True, help='only event')
+parser.add_argument('--batch_size', default=16, type=int, help='batch size')
+parser.add_argument('--epoch', default=10, type=int, help='epoch')
+parser.add_argument('--lr_lm', default=0.000001, type=float, help='learning rate')
+parser.add_argument('--lr_class', default=0.0001, type=float, help='linear_learning rate')
+parser.add_argument('--l_alpha', default=0.25, type=float)
+parser.add_argument('--l_beta', default=0.25, type=float)
+parser.add_argument('--alpha', default=0.15, type=float)
+parser.add_argument('--beta', default=0.15, type=float)
+args = parser.parse_args()
 
 def train_dpos(dataset, model_name=None, PLM=None, device=None):
     dataset_folder = f'./datasets/{dataset}/'
@@ -34,7 +52,7 @@ def train_dpos(dataset, model_name=None, PLM=None, device=None):
     parallel_model = torch.nn.DataParallel(scorer_module, device_ids=device_ids)
     parallel_model.module.to(device)
     train(train_pairs, train_labels, dev_pairs, dev_labels, parallel_model, evt_mention_map, dataset_folder, device, PLM,
-          batch_size=16, n_iters=10, lr_lm=0.000001, lr_class=0.0001)
+          batch_size=args.batch_size, n_iters=args.epoch, lr_lm=args.lr_lm, lr_class=args.lr_class)
 
 
 def train(train_pairs,
@@ -77,18 +95,38 @@ def train(train_pairs,
         iteration_loss = 0.
         # new_batch_size = batching(len(train_indices), batch_size, len(device_ids))
         new_batch_size = batch_size
-        for i in tqdm(range(0, len(train_indices[:100]), new_batch_size), desc='Training'):
+        for i in tqdm(range(0, len(train_indices), new_batch_size), desc='Training'):
             optimizer.zero_grad()
             batch_indices = train_indices[i: i + new_batch_size]
 
-            scores_ab = forward_ab(parallel_model, train_ab, device, batch_indices)
-            scores_ba = forward_ab(parallel_model, train_ba, device, batch_indices)
-
             batch_labels = train_labels[batch_indices].reshape((-1, 1)).to(device)
 
-            scores_mean = (scores_ab + scores_ba) / 2
+            if args.full:
+                scores_ab = forward_ab(parallel_model, train_ab, device, batch_indices)
+                scores_ba = forward_ab(parallel_model, train_ba, device, batch_indices)
+                scores_mean = (scores_ab + scores_ba) / 2
+                full_loss = bce_loss(scores_mean, batch_labels)
+            else:
+                full_loss = 0.0
 
-            loss = bce_loss(scores_mean, batch_labels)
+            if args.c_only:
+                c_only_scores_ab = c_only_forward_ab(parallel_model, c_only_train_ab, device, batch_indices)
+                c_only_scores_ba = c_only_forward_ab(parallel_model, c_only_train_ba, device, batch_indices)
+                c_only_scores_mean = (c_only_scores_ab + c_only_scores_ba) / 2
+                c_only_loss = bce_loss(c_only_scores_mean, batch_labels)
+            else:
+                c_only_loss = 0.0
+
+            if args.e_only:
+                e_only_scores_ab = e_only_forward_ab(parallel_model, e_only_train_ab, device, batch_indices)
+                e_only_scores_ba = e_only_forward_ab(parallel_model, e_only_train_ba, device, batch_indices)
+                e_only_scores_mean = (e_only_scores_ab + e_only_scores_ba) / 2
+                e_only_loss = bce_loss(e_only_scores_mean, batch_labels)
+            else:
+                e_only_loss = 0.0
+
+
+            loss = full_loss + args.l_alpha*c_only_loss + args.l_beta*e_only_loss
 
             loss.backward()
 
@@ -98,8 +136,16 @@ def train(train_pairs,
 
         print(f'Iteration {n} Loss:', iteration_loss / len(train_pairs))
         # iteration accuracy
-        dev_scores_ab, dev_scores_ba = predict_dpos(parallel_model, dev_ab, dev_ba, device, batch_size)
-        dev_predictions = (dev_scores_ab + dev_scores_ba)/2
+        dev_scores_ab, dev_scores_ba, c_only_dev_scores_ab, c_only_dev_scores_ba, e_only_dev_scores_ab, e_only_dev_scores_ba = predict_dpos(parallel_model,
+                                                                                                                                            dev_ab, dev_ba,
+                                                                                                                                            c_only_dev_ab, c_only_dev_ba,
+                                                                                                                                            e_only_dev_ab, e_only_dev_ba,
+                                                                                                                                            device, batch_size)
+        full_dev_predictions = (dev_scores_ab + dev_scores_ba)/2
+        c_only_dev_predictions = (c_only_dev_scores_ab + c_only_dev_scores_ba)/2
+        e_only_dev_predictions = (e_only_dev_scores_ab + e_only_dev_scores_ba)/2
+        dev_predictions = full_dev_predictions - args.alpha*c_only_dev_predictions - args.beta*e_only_dev_predictions
+
         dev_predictions = dev_predictions > 0.5
         dev_predictions = torch.squeeze(dev_predictions)
 
@@ -140,6 +186,6 @@ def train(train_pairs,
 
 
 if __name__ == '__main__':
-    device = 0
-    train_dpos('ecb', model_name='/root/lanyun-tmp/roberta-base', PLM='small', device=device)
-    train_dpos('gvc', model_name='/root/lanyun-tmp/roberta-base', PLM='small', device=device)
+    device = args.gpu_num
+    train_dpos('ecb', model_name=args.model_name, PLM=args.PLM, device=device)
+    train_dpos('gvc', model_name=args.model_name, PLM=args.PLM, device=device)
