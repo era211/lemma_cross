@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" autoUpload="Always" serverName="root@link.lanyun.net:10307 password" remoteFilesAllowedToDisappearOnAutoupload="false">
+  <component name="PublishConfigData" autoUpload="Always" serverName="Copy of project-level server 'yaolong' (16)" remoteFilesAllowedToDisappearOnAutoupload="false">
     <serverData>
       <paths name="Copy of project-level server 'yaolong'">
         <serverdata>
@@ -41,6 +41,20 @@
         <serverdata>
           <mappings>
             <mapping deploy="/home/yaolong/lemma_ce_coref-main" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="Copy of project-level server 'yaolong' (15)">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/yaolong/lemma_ce_coref-main" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="Copy of project-level server 'yaolong' (16)">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/yaolong/lemma_cross" local="$PROJECT_DIR$" />
           </mappings>
         </serverdata>
       </paths>

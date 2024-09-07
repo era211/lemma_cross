@@ -6,7 +6,7 @@ from coval.coval.conll.reader import get_coref_infos
 from coval.coval.eval.evaluator import evaluate_documents as evaluate
 from coval.coval.eval.evaluator import muc, b_cubed, ceafe, lea
 import torch
-from c_models import CrossEncoder
+from c_models import CrossEncoder, COnlyCrossEncoder, EOnlyCrossEncoder
 from tqdm import tqdm
 from heuristic import lh_split
 from c_helper import cluster
@@ -59,13 +59,29 @@ def predict_dpos(parallel_model, c_only_parallel_model, e_only_parallel_model, d
     return torch.cat(all_scores_ab), torch.cat(all_scores_ba), torch.cat(c_only_all_scores_ab), torch.cat(c_only_all_scores_ba), torch.cat(e_only_all_scores_ab), torch.cat(e_only_all_scores_ba)
 
 
-def predict_trained_model(mention_map, model_name, linear_weights_path, test_pairs, text_key='bert_doc', max_sentence_len=1024, long=True):
+def predict_trained_model(mention_map, bert_path, linear_weights_path, test_pairs, text_key='bert_doc', max_sentence_len=1024, long=True):
     device = torch.device('cuda:0')
     device_ids = list(range(1))
     # model = AutoModel.from_pretrained(model_name)
-    linear_weights = torch.load(linear_weights_path)
-    scorer_module = CrossEncoder(is_training=False, model_name=model_name, long=long,
+    full_model_name = bert_path + 'f_CrossEncoder' + '/bert'
+    full_linear_weights_path = linear_weights_path + "/linear.chkpt"
+    linear_weights = torch.load(full_linear_weights_path)
+    scorer_module = CrossEncoder(is_training=False, model_name=full_model_name, long=long,
                                       linear_weights=linear_weights).to(device)
+
+    c_only_model_name = bert_path + 'c_only_CrossEncoder' + '/bert'
+    c_only_linear_weights_path = linear_weights_path + "/linear.chkpt"
+    c_only_linear_weights = torch.load(c_only_linear_weights_path)
+    c_only_scorer_module = COnlyCrossEncoder(is_training=False, model_name=c_only_model_name, long=long,
+                                      linear_weights=c_only_linear_weights).to(device)
+
+
+    e_only_model_name = bert_path + 'e_only_CrossEncoder' + '/bert'
+    e_only_linear_weights_path = linear_weights_path + "/linear.chkpt"
+    e_only_linear_weights = torch.load(e_only_linear_weights_path)
+    e_only_scorer_module = EOnlyCrossEncoder(is_training=False, model_name=e_only_model_name, long=long,
+                                      linear_weights=e_only_linear_weights).to(device)
+
     full_parallel_model = torch.nn.DataParallel(scorer_module, device_ids=device_ids)
     full_parallel_model.module.to(device)
 
@@ -74,8 +90,6 @@ def predict_trained_model(mention_map, model_name, linear_weights_path, test_pai
 
     e_only_parallel_model = torch.nn.DataParallel(e_only_scorer_module, device_ids=device_ids)
     e_only_parallel_model.module.to(device)
-
-
 
     tokenizer = full_parallel_model.module.tokenizer
     # prepare data
@@ -111,10 +125,16 @@ def save_dpos_scores(dataset, split, dpos_folder, heu='lh', threshold=0.999, tex
     test_pairs = tps + fps
     test_labels = [1]*len(tps) + [0]*len(fps)
 
-    linear_weights_path = dpos_folder + "/linear.chkpt"
-    bert_path = dpos_folder + '/bert'
+    linear_weights_path = dpos_folder
+    bert_path = dpos_folder
 
-    test_scores_ab, test_scores_ba, c_only_test_scores_ab, c_only_test_scores_ba, e_only_test_scores_ab, e_only_test_scores_ba, pairs = predict_trained_model(evt_mention_map, bert_path, linear_weights_path, test_pairs, text_key, max_sentence_len, long=True)
+    test_scores_ab, test_scores_ba, c_only_test_scores_ab, c_only_test_scores_ba, e_only_test_scores_ab, e_only_test_scores_ba, pairs = predict_trained_model(evt_mention_map,
+                                                                                                                                                              bert_path,
+                                                                                                                                                              linear_weights_path,
+                                                                                                                                                              test_pairs,
+                                                                                                                                                              text_key,
+                                                                                                                                                              max_sentence_len,
+                                                                                                                                                              long=True)
 
     full_test_predictions = (test_scores_ab + test_scores_ba) / 2
     c_only_test_predictions = (c_only_test_scores_ab + c_only_test_scores_ba) / 2

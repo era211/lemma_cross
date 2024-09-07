@@ -15,7 +15,7 @@ def train_dpos(dataset, model_name=None, PLM=None, device=None):
     mention_map = pickle.load(open(dataset_folder + "/mention_map.pkl", 'rb'))
     evt_mention_map = {m_id: m for m_id, m in mention_map.items() if m['men_type'] == 'evt'}
     device = torch.device(device)
-    device_ids = [0, 1]
+    device_ids = [device]
     # device_ids = list(range(1))
     train_mp_mpt, _ = pickle.load(open(dataset_folder + '/lh/mp_mp_t_train.pkl', 'rb'))
     dev_mp_mpt, _ = pickle.load(open(dataset_folder + '/lh/mp_mp_t_dev.pkl', 'rb'))
