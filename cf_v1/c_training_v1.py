@@ -13,9 +13,9 @@ from argument import args
 
 
 def train_dpos(dataset, model_name=None, PLM=None, device=None):
-    dataset_folder = f'./datasets/{dataset}/'
-    save_model_path = f'./output/{dataset}/cf/'
-    mention_map = pickle.load(open(dataset_folder + "/mention_map.pkl", 'rb'))
+    dataset_folder = f'/home/yaolong/lemma_cross/datasets/{dataset}/'
+    save_model_path = f'/home/yaolong/lemma_cross/output/{dataset}/cf/'
+    mention_map = pickle.load(open(dataset_folder + "mention_map.pkl", 'rb'))
     evt_mention_map = {m_id: m for m_id, m in mention_map.items() if m['men_type'] == 'evt'}
     device = torch.device(device)
     device_ids = [device]
@@ -189,7 +189,7 @@ def train(train_pairs,
 
 if __name__ == '__main__':
     device = args.gpu_num
-    print('train  ecb ...')
+    print(f'train  ecb ...\n model_name: {args.model_name}, PLM: {args.PLM}, device: {device}')
     train_dpos('ecb', model_name=args.model_name, PLM=args.PLM, device=device)
-    print('train  gvc ...')
+    print(f'train  gvc ...\n model_name: {args.model_name}, PLM: {args.PLM}, device: {device}')
     train_dpos('gvc', model_name=args.model_name, PLM=args.PLM, device=device)
