@@ -1,3 +1,5 @@
+import sys
+sys.path.append("/home/yaolong/lemma_cross")
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import connected_components
 import string
@@ -6,7 +8,7 @@ import numpy as np
 import torch
 import re
 import pandas as pd
-
+from argument import args
 TRAIN = 'train'
 DEV = 'dev'
 TEST = 'test'
@@ -150,7 +152,7 @@ def forward_ab(parallel_model, ab_dict, c_only_dict, e_only_dict, device, indice
                           e_only_batch_tensor_ab, e_only_batch_am_ab, e_only_batch_posits_ab,
                           lm_only=lm_only)
 
-def tokenize(tokenizer, mention_pairs, mention_map, m_end, max_sentence_len=1024, text_key='bert_doc', truncate=True):
+def tokenize(tokenizer, mention_pairs, mention_map, m_end, max_sentence_len=100, text_key='bert_doc', truncate=True):
     if max_sentence_len is None:
         max_sentence_len = tokenizer.model_max_length  # 512
 
@@ -445,7 +447,7 @@ def save_parameters(scorer_folder, parallel_model):
 
 
 def save_results_to_csv(epoch, loss, factual_dev_accuracy, factual_dev_precision, factual_dev_recall, factual_dev_f1,
-                        dev_accuracy, dev_precision, dev_recall, dev_f1, working_folder, PLM):
+                        dev_accuracy, dev_precision, dev_recall, dev_f1, working_folder, dataset, PLM):
     results = {
         'Epoch': [epoch],
         'Loss': [loss],
@@ -458,11 +460,16 @@ def save_results_to_csv(epoch, loss, factual_dev_accuracy, factual_dev_precision
         'Dev Recall': [dev_recall],
         'Dev F1': [dev_f1]
     }
-
     df = pd.DataFrame(results)
-    save_file = working_folder + PLM + '/scorer/results.csv'
-    # 检查文件是否存在
-    if os.path.exists(save_file):
-        df.to_csv(save_file, mode='a', header=False, index=False)
+    save_file = working_folder + '/' + dataset + '/' + PLM + '/scorer/'
+    if not os.path.exists(save_file):
+                os.makedirs(save_file)
+    if args.train == 'train':
+        save_file_csv = save_file + 'train_results.csv'
     else:
-        df.to_csv(save_file, mode='w', index=False)
+        save_file_csv = save_file + 'test_results.csv'
+    # 检查文件是否存在
+    if os.path.exists(save_file_csv):
+        df.to_csv(save_file_csv, mode='a', header=False, index=False)
+    else:
+        df.to_csv(save_file_csv, mode='w', index=False)

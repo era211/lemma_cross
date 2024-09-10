@@ -1,3 +1,5 @@
+import sys
+sys.path.append("../")
 from transformers import AutoModel
 from c_helper_v1 import *
 import pickle
@@ -6,7 +8,7 @@ from coval.coval.conll.reader import get_coref_infos
 from coval.coval.eval.evaluator import evaluate_documents as evaluate
 from coval.coval.eval.evaluator import muc, b_cubed, ceafe, lea
 import torch
-from c_models import CrossEncoder, COnlyCrossEncoder, EOnlyCrossEncoder
+from c_models_v1 import CrossEncoder
 from tqdm import tqdm
 from heuristic import lh_split
 from c_helper import cluster
@@ -54,8 +56,8 @@ def predict_dpos(parallel_model, dev_ab, dev_ba, c_only_dev_ab, c_only_dev_ba, e
 
 
 def predict_trained_model(mention_map, bert_path, linear_weights_path, test_pairs, text_key='bert_doc', max_sentence_len=1024, long=True):
-    device = torch.device('cuda:0')
-    device_ids = list(range(1))
+    device = args.gpu_num
+    device_ids = [device]
     # model = AutoModel.from_pretrained(model_name)
     full_model_name = bert_path + 'f_CrossEncoder' + '/bert'
     full_linear_weights_path = linear_weights_path + "/linear.chkpt"
@@ -63,27 +65,8 @@ def predict_trained_model(mention_map, bert_path, linear_weights_path, test_pair
     scorer_module = CrossEncoder(is_training=False, model_name=full_model_name, long=long,
                                       linear_weights=linear_weights).to(device)
 
-    c_only_model_name = bert_path + 'c_only_CrossEncoder' + '/bert'
-    c_only_linear_weights_path = linear_weights_path + "/linear.chkpt"
-    c_only_linear_weights = torch.load(c_only_linear_weights_path)
-    c_only_scorer_module = COnlyCrossEncoder(is_training=False, model_name=c_only_model_name, long=long,
-                                      linear_weights=c_only_linear_weights).to(device)
-
-
-    e_only_model_name = bert_path + 'e_only_CrossEncoder' + '/bert'
-    e_only_linear_weights_path = linear_weights_path + "/linear.chkpt"
-    e_only_linear_weights = torch.load(e_only_linear_weights_path)
-    e_only_scorer_module = EOnlyCrossEncoder(is_training=False, model_name=e_only_model_name, long=long,
-                                      linear_weights=e_only_linear_weights).to(device)
-
     full_parallel_model = torch.nn.DataParallel(scorer_module, device_ids=device_ids)
     full_parallel_model.module.to(device)
-
-    c_only_parallel_model = torch.nn.DataParallel(c_only_scorer_module, device_ids=device_ids)
-    c_only_parallel_model.module.to(device)
-
-    e_only_parallel_model = torch.nn.DataParallel(e_only_scorer_module, device_ids=device_ids)
-    e_only_parallel_model.module.to(device)
 
     tokenizer = full_parallel_model.module.tokenizer
     # prepare data
@@ -93,24 +76,22 @@ def predict_trained_model(mention_map, bert_path, linear_weights_path, test_pair
                                                                                           text_key=text_key,
                                                                                           max_sentence_len=max_sentence_len)
     test_scores_ab, test_scores_ba, c_only_test_scores_ab, c_only_test_scores_ba, e_only_test_scores_ab, e_only_test_scores_ba  = predict_dpos(full_parallel_model,
-                                                                                                                                               c_only_parallel_model,
-                                                                                                                                               e_only_parallel_model,
                                                                                                                                                test_ab, test_ba,
                                                                                                                                                c_only_test_ab, c_only_test_ba,
                                                                                                                                                e_only_test_ab, e_only_test_ba,
-                                                                                                                                               device, batch_size=64)
+                                                                                                                                               device, batch_size=args.batch_size)
 
     return test_scores_ab, test_scores_ba, c_only_test_scores_ab, c_only_test_scores_ba, e_only_test_scores_ab, e_only_test_scores_ba, test_pairs
 
 
 def save_dpos_scores(dataset, split, dpos_folder, heu='lh', threshold=0.999, text_key='bert_doc', max_sentence_len=1024, long=True):
-    dataset_folder = f'./datasets/{dataset}/'
+    dataset_folder = f'/home/yaolong/lemma_cross/datasets/{dataset}/'
     mention_map = pickle.load(open(dataset_folder + "/mention_map.pkl", 'rb'))
     evt_mention_map = {m_id: m for m_id, m in mention_map.items() if m['men_type'] == 'evt' and m['split'] == split}
     curr_mentions = list(evt_mention_map.keys())
     # dev_pairs, dev_labels = zip(*load_lemma_dataset('./datasets/ecb/lemma_balanced_tp_fp_test.tsv'))
 
-    mps, mps_trans = pickle.load(open(f'./datasets/{dataset}/{heu}/mp_mp_t_{split}.pkl', 'rb'))
+    mps, mps_trans = pickle.load(open(f'/home/yaolong/lemma_cross/datasets/{dataset}/{heu}/mp_mp_t_{split}.pkl', 'rb'))
     tps, fps, tns, fns = mps
 
     tps = tps
@@ -135,18 +116,42 @@ def save_dpos_scores(dataset, split, dpos_folder, heu='lh', threshold=0.999, tex
     e_only_test_predictions = (e_only_test_scores_ab + e_only_test_scores_ba) / 2
     predictions = full_test_predictions - args.alpha * c_only_test_predictions - args.beta * e_only_test_predictions
 
+    f_predictions = torch.squeeze(full_test_predictions) > threshold
     predictions = torch.squeeze(predictions) > threshold
-
     test_labels = torch.LongTensor(test_labels)
 
-    print("Test accuracy:", accuracy(predictions, test_labels))
-    print("Test precision:", precision(predictions, test_labels))
-    print("Test recall:", recall(predictions, test_labels))
-    print("Test f1:", f1_score(predictions, test_labels))
 
-    pickle.dump(test_pairs, open(dataset_folder + f'/dpos/{split}_{heu}_pairs.pkl', 'wb'))
-    pickle.dump(test_scores_ab, open(dataset_folder + f'/dpos/{split}_{heu}_scores_ab.pkl', 'wb'))
-    pickle.dump(test_scores_ba, open(dataset_folder + f'/dpos/{split}_{heu}_scores_ba.pkl', 'wb'))
+    # 事实结果
+    factual_test_accuracy = accuracy(f_predictions, test_labels)
+    factual_test_precision = precision(f_predictions, test_labels)
+    factual_test_recall = recall(f_predictions, test_labels)
+    factual_test_f1 = f1_score(f_predictions, test_labels)
+    print("Factual Test accuracy:", factual_test_accuracy)
+    print("Factual Test precision:", factual_test_precision)
+    print("Factual Test recall:", factual_test_recall)
+    print("Factual Test f1:", factual_test_f1)
+
+    # 反事实结果
+    test_accuracy = accuracy(predictions, test_labels)
+    test_precision = precision(predictions, test_labels)
+    test_recall = recall(predictions, test_labels)
+    test_f1 = f1_score(predictions, test_labels)
+    print("Test accuracy:", test_accuracy)
+    print("Test precision:", test_precision)
+    print("Test recall:", test_recall)
+    print("Test f1:", test_f1)
+
+    # 保存结果
+    save_results_to_csv(0, 0.0, factual_test_accuracy, factual_test_precision,
+                        factual_test_recall, factual_test_f1, test_accuracy, test_precision, test_recall, test_f1, working_folder=args.save_model_path, dataset=dataset, PLM=PLM)
+
+    pickle.dump(test_pairs, open(args.save_model_path + f'/dpos/{split}_{heu}_pairs.pkl', 'wb'))
+    pickle.dump(test_scores_ab, open(args.save_model_path + f'/dpos/{split}_{heu}_scores_ab.pkl', 'wb'))
+    pickle.dump(test_scores_ba, open(args.save_model_path + f'/dpos/{split}_{heu}_scores_ba.pkl', 'wb'))
+    pickle.dump(test_scores_ab, open(args.save_model_path + f'/dpos/{split}_{heu}_c_only_test_scores_ab.pkl', 'wb'))
+    pickle.dump(test_scores_ba, open(args.save_model_path + f'/dpos/{split}_{heu}_c_only_test_scores_ba.pkl', 'wb'))
+    pickle.dump(test_scores_ab, open(args.save_model_path + f'/dpos/{split}_{heu}_e_only_test_scores_ab.pkl', 'wb'))
+    pickle.dump(test_scores_ba, open(args.save_model_path + f'/dpos/{split}_{heu}_e_only_test_scores_ba.pkl', 'wb'))
 
 
 def get_cluster_scores(dataset_folder, evt_mention_map, all_mention_pairs, dataset, split, heu, similarities, dpos_score_map, out_name, threshold):
@@ -252,13 +257,17 @@ def dpos_tmp(dataset, split):
 
 
 def get_dpos(dataset, heu, split):
-    dataset_folder = f'./datasets/{dataset}/'
+    dataset_folder = args.save_model_path
     pairs = pickle.load(open(dataset_folder + f"/dpos/{split}_{heu}_pairs.pkl", 'rb'))
     scores_ab = pickle.load(open(dataset_folder + f"/dpos/{split}_{heu}_scores_ab.pkl", 'rb'))
     scores_ba = pickle.load(open(dataset_folder + f"/dpos/{split}_{heu}_scores_ba.pkl", 'rb'))
+    c_only_test_scores_ab = pickle.load(open(dataset_folder + f"/dpos/{split}_{heu}_c_only_test_scores_ab", 'rb'))
+    c_only_test_scores_ba = pickle.load(open(dataset_folder + f"/dpos/{split}_{heu}_c_only_test_scores_ba", 'rb'))
+    e_only_test_scores_ab = pickle.load(open(dataset_folder + f"/dpos/{split}_{heu}_e_only_test_scores_ab.pkl", 'rb'))
+    e_only_test_scores_ba = pickle.load(open(dataset_folder + f"/dpos/{split}_{heu}_e_only_test_scores_ba.pkl", 'rb'))
     dpos_map = {}
-    for b, ab, ba in zip(pairs, scores_ab, scores_ba):
-        dpos_map[tuple(b)] = (float(ab), float(ba))
+    for b, ab, ba, cab, cba, eab, eba in zip(pairs, scores_ab, scores_ba, c_only_test_scores_ab, c_only_test_scores_ba, e_only_test_scores_ab, e_only_test_scores_ba):
+        dpos_map[tuple(b)] = (float(ab), float(ba), float(cab), float(cba), float(eab), float(eba))
     return dpos_map
 
 

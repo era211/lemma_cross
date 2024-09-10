@@ -1,4 +1,5 @@
 import sys
+sys.path.append("../")
 import pickle
 import torch
 from c_helper_v1 import tokenize, forward_ab, f1_score, accuracy, precision, recall, save_parameters, save_results_to_csv
@@ -14,7 +15,7 @@ from argument import args
 
 def train_dpos(dataset, model_name=None, PLM=None, device=None):
     dataset_folder = f'/home/yaolong/lemma_cross/datasets/{dataset}/'
-    save_model_path = f'/home/yaolong/lemma_cross/output/{dataset}/cf/'
+    save_model_path = args.save_model_path
     mention_map = pickle.load(open(dataset_folder + "mention_map.pkl", 'rb'))
     evt_mention_map = {m_id: m for m_id, m in mention_map.items() if m['men_type'] == 'evt'}
     device = torch.device(device)
@@ -39,11 +40,12 @@ def train_dpos(dataset, model_name=None, PLM=None, device=None):
     parallel_model = torch.nn.DataParallel(scorer_module, device_ids=device_ids)
     parallel_model.module.to(device)
 
-    train(train_pairs, train_labels, dev_pairs, dev_labels, parallel_model, evt_mention_map, save_model_path, device, PLM,
+    train(dataset, train_pairs, train_labels, dev_pairs, dev_labels, parallel_model, evt_mention_map, save_model_path, device, PLM,
           batch_size=args.batch_size, n_iters=args.epoch, lr_lm=args.lr_lm, lr_class=args.lr_class)
 
 
-def train(train_pairs,
+def train(dataset,
+          train_pairs,
           train_labels,
           dev_pairs,
           dev_labels,
@@ -72,14 +74,14 @@ def train(train_pairs,
     tokenizer = parallel_model.module.tokenizer
 
     # prepare data
-    train_ab, train_ba, c_only_train_ab, c_only_train_ba, e_only_train_ab, e_only_train_ba = tokenize(tokenizer, train_pairs, mention_map, parallel_model.module.end_id, text_key='bert_sentence', max_sentence_len=512)  # 返回编码后的内容，inputs_id, attention_mask, position_id，对两个提及的句子分别进行处理，最后按行堆叠到一起
-    dev_ab, dev_ba, c_only_dev_ab, c_only_dev_ba, e_only_dev_ab, e_only_dev_ba = tokenize(tokenizer, dev_pairs, mention_map, parallel_model.module.end_id, text_key='bert_sentence', max_sentence_len=512)
+    train_ab, train_ba, c_only_train_ab, c_only_train_ba, e_only_train_ab, e_only_train_ba = tokenize(tokenizer, train_pairs, mention_map, parallel_model.module.end_id, text_key='bert_sentence', max_sentence_len=args.max_sentence_len)  # 返回编码后的内容，inputs_id, attention_mask, position_id，对两个提及的句子分别进行处理，最后按行堆叠到一起
+    dev_ab, dev_ba, c_only_dev_ab, c_only_dev_ba, e_only_dev_ab, e_only_dev_ba = tokenize(tokenizer, dev_pairs, mention_map, parallel_model.module.end_id, text_key='bert_sentence', max_sentence_len=args.max_sentence_len)
 
     # labels
     train_labels = torch.FloatTensor(train_labels)
     dev_labels = torch.LongTensor(dev_labels)
     best_f1 = 0.0
-    global patience
+    patience = 0
     for n in tqdm(range(n_iters), desc='Epoch'):
         train_indices = list(range(len(train_pairs)))  # 得到训练对中的样本索引列表
         random.shuffle(train_indices)
@@ -151,11 +153,11 @@ def train(train_pairs,
 
         # 保存结果
         save_results_to_csv(n, iteration_loss / len(train_pairs), factual_dev_accuracy, factual_dev_precision, factual_dev_recall,
-                            factual_dev_f1, dev_accuracy, dev_precision, dev_recall, dev_f1, working_folder, PLM)
+                            factual_dev_f1, dev_accuracy, dev_precision, dev_recall, dev_f1, working_folder, dataset, PLM)
         if dev_f1 > best_f1:
             best_f1 = dev_f1
             patience = 0
-            scorer_folder = working_folder + PLM + '/scorer/best_f1_scorer/'
+            scorer_folder = working_folder + '/' + dataset + '/' + PLM + '/scorer/best_f1_scorer/'
             if not os.path.exists(scorer_folder):
                 os.makedirs(scorer_folder)
 
@@ -169,7 +171,7 @@ def train(train_pairs,
                 sys.exit()
 
         if n % 2 == 0:
-            scorer_folder = working_folder + PLM + f'/scorer/chk_{n}/'
+            scorer_folder = working_folder + '/' + dataset + '/' + PLM + f'/scorer/chk_{n}/'
             if not os.path.exists(scorer_folder):
                 os.makedirs(scorer_folder)
 
@@ -178,18 +180,18 @@ def train(train_pairs,
             print(f'saved model at {n}')
 
 
-    scorer_folder = working_folder + PLM + '/scorer/final/'
+    scorer_folder = working_folder + '/' + dataset + '/' + PLM + '/scorer/final/'
     if not os.path.exists(scorer_folder):
         os.makedirs(scorer_folder)
 
     save_parameters(scorer_folder, parallel_model)
     print('best_f1:', best_f1)
-    print(f'\nsaved final model\n')
+    print(f'\nsaved final model')
 
 
 if __name__ == '__main__':
     device = args.gpu_num
-    print(f'train  ecb ...\n model_name: {args.model_name}, PLM: {args.PLM}, device: {device}')
+    print(f'train  ecb ... model_name: {args.model_name}, PLM: {args.PLM}, device: {device}')
     train_dpos('ecb', model_name=args.model_name, PLM=args.PLM, device=device)
-    print(f'train  gvc ...\n model_name: {args.model_name}, PLM: {args.PLM}, device: {device}')
+    print(f'train  gvc ... model_name: {args.model_name}, PLM: {args.PLM}, device: {device}')
     train_dpos('gvc', model_name=args.model_name, PLM=args.PLM, device=device)

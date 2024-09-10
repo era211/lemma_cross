@@ -38,7 +38,7 @@ def predict_dpos(parallel_model, dev_ab, dev_ba, device, batch_size):
 
 
 def predict_trained_model(mention_map, model_name, linear_weights_path, test_pairs, text_key='bert_doc', max_sentence_len=1024, long=True):
-    device = torch.device('cuda:0')
+    device = torch.device('cuda:6')
     device_ids = list(range(1))
     linear_weights = torch.load(linear_weights_path)
     scorer_module = CrossEncoder(is_training=False, model_name=model_name, long=long,
@@ -73,7 +73,7 @@ def save_dpos_scores(dataset, split, dpos_folder, heu='lh', threshold=0.999, tex
     test_labels = [1]*len(tps) + [0]*len(fps)
 
     linear_weights_path = dpos_folder + "/linear.chkpt"
-    bert_path = dpos_folder + '/bert'
+    bert_path = dpos_folder + 'bert'
 
     scores_ab, scores_ba, pairs = predict_trained_model(evt_mention_map, bert_path, linear_weights_path, test_pairs, text_key, max_sentence_len, long=True)
 
@@ -308,48 +308,8 @@ if __name__ == '__main__':
     ECB = 'ecb'
     GVC = 'gvc'
     print('tps', 'fps',  'fns')
-    # predict('ecb', DEV)
-    # predict('ecb', TEST)
-    #
-    # predict('ecb', DEV, heu='lh_oracle')
-    predict('ecb', TEST, heu='lh_oracle')
-    #
-    # predict('gvc', DEV)
-    # predict('gvc', TEST)
-    # #
-    # # predict('gvc', DEV, heu='lh_oracle')
-    # predict('gvc', TEST, heu='lh_oracle')
-    # dpos = dpos_tmp('ecb', 'dev')
-    # predict_with_dpos('ecb', 'dev', dpos, heu='lh_oracle')
-
-
-    # dataset = 'gvc'
-    # split = 'test'
-    # heu = 'lh_oracle'
-    # dpos_path =  './datasets/gvc/scorer/'
-    # save_dpos_scores(dataset, split, dpos_path, heu='lh', text_key='bert_sentence', max_sentence_len=512)
-
-    # dpos = get_dpos(dataset, heu, split)
-    # predict_with_dpos(dataset, split, dpos, heu=heu)
-
-
-    # (tps, fps, _, fns), mps_t = lh_oracle_split(dataset, split, 0.05)
-    # (tps, fps, _, fns), mps_t = lh_oracle_split(dataset, split, -1)
-
-    # print(len(tps), len(fps), len(fns))
-
-    # dpos_path = './datasets/ecb/scorer/chk_2/'
-    # dpos_path = './model_weights/chk_30/'
-    # save_dpos_scores(dataset, split, dpos_path, heu=heu, text_key='bert_doc', max_sentence_len=1024)
-    # dpos = get_dpos(dataset, heu, split)
-    # predict_with_dpos(dataset, split, dpos, heu=heu)
-    # save_dpos_scores('gvc', 'dev', dpos_path, heu='lh')
-    # threshold_ablation()
-    # mention_pair_analysis(dataset, split, heu)
-
-    # LH_ORACLE + D small
-    heu = 'lh_oracle'
-    dpos_path = './ecb_small/'
+    heu = 'lh'
+    dpos_path = '/home/yaolong/lemma_cross/output/ecb/small/scorer/best_f1_scorer/'
     save_dpos_scores(ECB, TEST, dpos_path, heu=heu, text_key='bert_sentence', max_sentence_len=512, long=False)
     dpos = get_dpos(ECB, heu, TEST)
     predict_with_dpos(ECB, TEST, dpos, heu=heu)
