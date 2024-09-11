@@ -164,11 +164,11 @@ def train(dataset,
             save_parameters(scorer_folder, parallel_model)
 
             print(f'\nsaved best f1 model\n')
-        else:
-            patience += 1
-            if patience > args.early_stop_patience:
-                print("Early Stopping")
-                sys.exit()
+        # else:
+        #     patience += 1
+        #     if patience > args.early_stop_patience:
+        #         print("Early Stopping")
+        #         sys.exit()
 
         if n % 2 == 0:
             scorer_folder = working_folder + '/' + dataset + '/' + PLM + f'/scorer/chk_{n}/'

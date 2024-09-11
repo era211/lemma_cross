@@ -5,7 +5,8 @@ import os
 import numpy as np
 import torch
 import re
-
+import pandas as pd
+from argument import args
 TRAIN = 'train'
 DEV = 'dev'
 TEST = 'test'
@@ -461,3 +462,33 @@ def save_parameters(scorer_folder, parallel_model, c_only_parallel_model, e_only
     torch.save(e_only_parallel_model.module.linear.state_dict(), model_path_e_only_linear)
     e_only_parallel_model.module.model.save_pretrained(model_path_e_only + '/bert')
     e_only_parallel_model.module.tokenizer.save_pretrained(model_path_e_only + '/bert')
+
+
+def save_results_to_csv(epoch, loss, factual_dev_accuracy, factual_dev_precision, factual_dev_recall, factual_dev_f1,
+                        dev_accuracy, dev_precision, dev_recall, dev_f1, working_folder, dataset, PLM):
+    results = {
+        'Epoch': [epoch],
+        'Loss': [loss],
+        'Factual Dev Accuracy': [factual_dev_accuracy],
+        'Factual Dev Precision': [factual_dev_precision],
+        'Factual Dev Recall': [factual_dev_recall],
+        'Factual Dev F1': [factual_dev_f1],
+        'Dev Accuracy': [dev_accuracy],
+        'Dev Precision': [dev_precision],
+        'Dev Recall': [dev_recall],
+        'Dev F1': [dev_f1]
+    }
+    df = pd.DataFrame(results)
+    save_file = working_folder + '/' + dataset + '/' + PLM + '/scorer/'
+    if not os.path.exists(save_file):
+                os.makedirs(save_file)
+    if args.train == 'train':
+        save_file_csv = save_file + 'train_results.csv'
+    else:
+        save_file_csv = save_file + 'test_results.csv'
+
+    # 检查文件是否存在
+    if os.path.exists(save_file_csv):
+        df.to_csv(save_file_csv, mode='a', header=False, index=False)
+    else:
+        df.to_csv(save_file_csv, mode='w', index=False)

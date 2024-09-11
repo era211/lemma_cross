@@ -1,6 +1,6 @@
 import pickle
 import torch
-from c_helper import tokenize, forward_ab, c_only_forward_ab, e_only_forward_ab, f1_score, accuracy, precision, recall, save_parameters
+from c_helper import tokenize, forward_ab, c_only_forward_ab, e_only_forward_ab, f1_score, accuracy, precision, recall, save_parameters, save_results_to_csv
 from c_prediction import predict_dpos
 import random
 from tqdm import tqdm
@@ -12,6 +12,7 @@ from argument import args
 
 def train_dpos(dataset, model_name=None, PLM=None, device=None):
     dataset_folder = f'./datasets/{dataset}/'
+    save_model_path = args.save_model_path
     mention_map = pickle.load(open(dataset_folder + "/mention_map.pkl", 'rb'))
     evt_mention_map = {m_id: m for m_id, m in mention_map.items() if m['men_type'] == 'evt'}
     device = torch.device(device)
@@ -44,11 +45,12 @@ def train_dpos(dataset, model_name=None, PLM=None, device=None):
     e_only_parallel_model = torch.nn.DataParallel(e_only_scorer_module, device_ids=device_ids)
     e_only_parallel_model.module.to(device)
 
-    train(train_pairs, train_labels, dev_pairs, dev_labels, full_parallel_model, c_only_parallel_model, e_only_parallel_model, evt_mention_map, dataset_folder, device, PLM,
+    train(dataset, train_pairs, train_labels, dev_pairs, dev_labels, full_parallel_model, c_only_parallel_model, e_only_parallel_model, evt_mention_map, save_model_path, device, PLM,
           batch_size=args.batch_size, n_iters=args.epoch, lr_lm=args.lr_lm, lr_class=args.lr_class)
 
 
-def train(train_pairs,
+def train(dataset,
+          train_pairs,
           train_labels,
           dev_pairs,
           dev_labels,
@@ -157,18 +159,40 @@ def train(train_pairs,
         e_only_dev_predictions = (e_only_dev_scores_ab + e_only_dev_scores_ba)/2
         dev_predictions = full_dev_predictions - args.alpha*c_only_dev_predictions - args.beta*e_only_dev_predictions
 
+        f_predictions = full_dev_predictions > 0.5
+        f_predictions = torch.squeeze(f_predictions)
         dev_predictions = dev_predictions > 0.5
         dev_predictions = torch.squeeze(dev_predictions)
 
-        print("dev accuracy:", accuracy(dev_predictions, dev_labels))
-        print("dev precision:", precision(dev_predictions, dev_labels))
-        print("dev recall:", recall(dev_predictions, dev_labels))
-        print("dev f1:", f1_score(dev_predictions, dev_labels))
+        # 事实结果
+        factual_dev_accuracy = accuracy(f_predictions, dev_labels)
+        factual_dev_precision = precision(f_predictions, dev_labels)
+        factual_dev_recall = recall(f_predictions, dev_labels)
+        factual_dev_f1 = f1_score(f_predictions, dev_labels)
+        print(f"factual dev accuracy for epoch {n}:", factual_dev_accuracy)
+        print(f"factual dev precision for epoch {n}:", factual_dev_precision)
+        print(f"factual dev recall for epoch {n}:", factual_dev_recall)
+        print(f"factual dev f1 for epoch {n}:", factual_dev_f1)
+
+        # 反事实结果
+        dev_accuracy = accuracy(dev_predictions, dev_labels)
+        dev_precision = precision(dev_predictions, dev_labels)
+        dev_recall = recall(dev_predictions, dev_labels)
+        dev_f1 = f1_score(dev_predictions, dev_labels)
+        print(f"dev accuracy for epoch {n}:", dev_accuracy)
+        print(f"dev precision for epoch {n}:", dev_precision)
+        print(f"dev recall for epoch {n}:", dev_recall)
+        print(f"dev f1 for epoch {n}:", dev_f1)
+
+        # 保存结果
+        save_results_to_csv(n, iteration_loss / len(train_pairs),
+                            factual_dev_accuracy, factual_dev_precision, factual_dev_recall, factual_dev_f1,
+                            dev_accuracy, dev_precision, dev_recall, dev_f1, working_folder, dataset, PLM)
 
         dev_f1 = f1_score(dev_predictions, dev_labels)
         if dev_f1 > best_f1:
             best_f1 = dev_f1
-            scorer_folder = working_folder + PLM + '/scorer/best_f1_scorer/'
+            scorer_folder = working_folder + '/' + dataset + '/' + PLM + '/scorer/best_f1_scorer/'
             if not os.path.exists(scorer_folder):
                 os.makedirs(scorer_folder)
 
@@ -178,7 +202,7 @@ def train(train_pairs,
             print(f'\nsaved best f1 model\n')
 
         if n % 2 == 0:
-            scorer_folder = working_folder + PLM + f'/scorer/chk_{n}'
+            scorer_folder = working_folder + '/' + dataset + '/' + PLM + f'/scorer/chk_{n}/'
             if not os.path.exists(scorer_folder):
                 os.makedirs(scorer_folder)
 
@@ -187,7 +211,7 @@ def train(train_pairs,
             print(f'saved model at {n}')
 
 
-    scorer_folder = working_folder + PLM + '/scorer/final/'
+    scorer_folder = working_folder + '/' + dataset + '/' + PLM + '/scorer/final/'
     if not os.path.exists(scorer_folder):
         os.makedirs(scorer_folder)
 
@@ -198,7 +222,7 @@ def train(train_pairs,
 
 if __name__ == '__main__':
     device = args.gpu_num
-    print('train  ecb ...')
+    print(f'train  ecb ... model_name: {args.model_name}, PLM: {args.PLM}, device: {device}')
     train_dpos('ecb', model_name=args.model_name, PLM=args.PLM, device=device)
-    print('train  gvc ...')
+    print(f'train  gvc ... model_name: {args.model_name}, PLM: {args.PLM}, device: {device}')
     train_dpos('gvc', model_name=args.model_name, PLM=args.PLM, device=device)
