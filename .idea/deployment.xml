@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" autoUpload="Always" serverName="Copy of project-level server 'yaolong' (16)" remoteFilesAllowedToDisappearOnAutoupload="false">
+  <component name="PublishConfigData" autoUpload="Always" serverName="yaolong@10.109.118.166:22 password (3)" remoteFilesAllowedToDisappearOnAutoupload="false" confirmBeforeUploading="false">
+    <option name="confirmBeforeUploading" value="false" />
     <serverData>
       <paths name="Copy of project-level server 'yaolong'">
         <serverdata>
@@ -153,6 +154,34 @@
         <serverdata>
           <mappings>
             <mapping deploy="/root/lanyun-tmp/lemma" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="root@region-3.seetacloud.com:48446 password">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/root/autodl-tmp/lemma_cross" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="yaolong@10.109.118.166:22 password">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/yaolong/lemma_cross" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="yaolong@10.109.118.166:22 password (2)">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/yaolong/lemma_cross" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="yaolong@10.109.118.166:22 password (3)">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/yaolong/lemma_cross" local="$PROJECT_DIR$" />
           </mappings>
         </serverdata>
       </paths>

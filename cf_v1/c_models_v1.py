@@ -29,6 +29,7 @@ class CrossEncoder(nn.Module):
             self.model = AutoModel.from_pretrained(model_name)
             self.model.resize_token_embeddings(len(self.tokenizer))
         else:
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
             self.model = AutoModel.from_pretrained(model_name)
 
         self.start_id = self.tokenizer.encode('<m>', add_special_tokens=False)[0]  # 将<m>转换为token ID

@@ -3,11 +3,11 @@ import argparse
 '''添加参数'''
 parser = argparse.ArgumentParser(description='Training a Counterfactual-ECR')
 parser.add_argument('--gpu_num', type=int, default=0, help=' A single GPU number')
-parser.add_argument('--model_name', type=str, default='/home/yaolong/PT_MODELS/PT_MODELS/roberta-base', help='roberta-base')
-# /home/yaolong/PT_MODELS/PT_MODELS/roberta-base    # /root/lanyun-tmp/plm/roberta-base
+parser.add_argument('--model_name', type=str, default='/root/autodl-tmp/PLM/roberta-base', help='roberta-base')
+# /home/yaolong/PT_MODELS/PT_MODELS/roberta-base    # /root/lanyun-tmp/plm/roberta-base  # /home/share/models/PT_MODELS/roberta-base
 parser.add_argument('--out_dir', type=str, default=None, help='output dir')
 parser.add_argument('--train', type=str, default='train', help='train file')
-parser.add_argument('--save_model_path', type=str, default=None, help='save model path')
+parser.add_argument('--save_model_path', type=str, default='/home/yaolong/lemma_cross/output/ecb/cf/small', help='save model path')
 parser.add_argument('--PLM', type=str, default='small', help='small or long')
 parser.add_argument('--early_stop_patience', type=int, default=5, help='early stopping patience')
 parser.add_argument('--full', type=bool, default=True, help='event and context')
@@ -20,7 +20,7 @@ parser.add_argument('--lr_lm', default=0.000001, type=float, help='learning rate
 parser.add_argument('--lr_class', default=0.0001, type=float, help='linear_learning rate')
 parser.add_argument('--l_alpha', default=0.25, type=float)
 parser.add_argument('--l_beta', default=0.25, type=float)
-parser.add_argument('--alpha', default=1, type=float)
-parser.add_argument('--beta', default=1, type=float)
+parser.add_argument('--alpha', default=0.1, type=float)
+parser.add_argument('--beta', default=0, type=float)
 args = parser.parse_args()
 print(args)

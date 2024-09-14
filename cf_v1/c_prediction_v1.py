@@ -1,5 +1,4 @@
 import sys
-sys.path.append("../")
 from transformers import AutoModel
 from c_helper_v1 import *
 import pickle
@@ -59,8 +58,8 @@ def predict_trained_model(mention_map, bert_path, linear_weights_path, test_pair
     device = args.gpu_num
     device_ids = [device]
     # model = AutoModel.from_pretrained(model_name)
-    full_model_name = bert_path + 'f_CrossEncoder' + '/bert'
-    full_linear_weights_path = linear_weights_path + "/linear.chkpt"
+    full_model_name = bert_path + 'bert'
+    full_linear_weights_path = linear_weights_path + "linear.chkpt"
     linear_weights = torch.load(full_linear_weights_path)
     scorer_module = CrossEncoder(is_training=False, model_name=full_model_name, long=long,
                                       linear_weights=linear_weights).to(device)
@@ -114,10 +113,10 @@ def save_dpos_scores(dataset, split, dpos_folder, heu='lh', threshold=0.999, tex
     full_test_predictions = (test_scores_ab + test_scores_ba) / 2
     c_only_test_predictions = (c_only_test_scores_ab + c_only_test_scores_ba) / 2
     e_only_test_predictions = (e_only_test_scores_ab + e_only_test_scores_ba) / 2
-    predictions = full_test_predictions - args.alpha * c_only_test_predictions - args.beta * e_only_test_predictions
+    predictions1 = full_test_predictions - args.alpha * c_only_test_predictions - args.beta * e_only_test_predictions
 
     f_predictions = torch.squeeze(full_test_predictions) > threshold
-    predictions = torch.squeeze(predictions) > threshold
+    predictions = torch.squeeze(predictions1) > threshold
     test_labels = torch.LongTensor(test_labels)
 
 
@@ -140,18 +139,8 @@ def save_dpos_scores(dataset, split, dpos_folder, heu='lh', threshold=0.999, tex
     print("Test precision:", test_precision)
     print("Test recall:", test_recall)
     print("Test f1:", test_f1)
+    return pairs, predictions1, test_scores_ab, test_scores_ba, c_only_test_scores_ab, c_only_test_scores_ba, e_only_test_scores_ab, e_only_test_scores_ba, test_f1
 
-    # 保存结果
-    save_results_to_csv(0, 0.0, factual_test_accuracy, factual_test_precision,
-                        factual_test_recall, factual_test_f1, test_accuracy, test_precision, test_recall, test_f1, working_folder=args.save_model_path, dataset=dataset, PLM=PLM)
-
-    pickle.dump(test_pairs, open(args.save_model_path + f'/dpos/{split}_{heu}_pairs.pkl', 'wb'))
-    pickle.dump(test_scores_ab, open(args.save_model_path + f'/dpos/{split}_{heu}_scores_ab.pkl', 'wb'))
-    pickle.dump(test_scores_ba, open(args.save_model_path + f'/dpos/{split}_{heu}_scores_ba.pkl', 'wb'))
-    pickle.dump(test_scores_ab, open(args.save_model_path + f'/dpos/{split}_{heu}_c_only_test_scores_ab.pkl', 'wb'))
-    pickle.dump(test_scores_ba, open(args.save_model_path + f'/dpos/{split}_{heu}_c_only_test_scores_ba.pkl', 'wb'))
-    pickle.dump(test_scores_ab, open(args.save_model_path + f'/dpos/{split}_{heu}_e_only_test_scores_ab.pkl', 'wb'))
-    pickle.dump(test_scores_ba, open(args.save_model_path + f'/dpos/{split}_{heu}_e_only_test_scores_ba.pkl', 'wb'))
 
 
 def get_cluster_scores(dataset_folder, evt_mention_map, all_mention_pairs, dataset, split, heu, similarities, dpos_score_map, out_name, threshold):
@@ -265,9 +254,12 @@ def get_dpos(dataset, heu, split):
     c_only_test_scores_ba = pickle.load(open(dataset_folder + f"/dpos/{split}_{heu}_c_only_test_scores_ba", 'rb'))
     e_only_test_scores_ab = pickle.load(open(dataset_folder + f"/dpos/{split}_{heu}_e_only_test_scores_ab.pkl", 'rb'))
     e_only_test_scores_ba = pickle.load(open(dataset_folder + f"/dpos/{split}_{heu}_e_only_test_scores_ba.pkl", 'rb'))
+    predictions = pickle.load(open(dataset_folder + f"/dpos/{split}_{heu}_predictions1.pkl", 'rb'))
     dpos_map = {}
-    for b, ab, ba, cab, cba, eab, eba in zip(pairs, scores_ab, scores_ba, c_only_test_scores_ab, c_only_test_scores_ba, e_only_test_scores_ab, e_only_test_scores_ba):
-        dpos_map[tuple(b)] = (float(ab), float(ba), float(cab), float(cba), float(eab), float(eba))
+    # for b, ab, ba, cab, cba, eab, eba in zip(pairs, scores_ab, scores_ba, c_only_test_scores_ab, c_only_test_scores_ba, e_only_test_scores_ab, e_only_test_scores_ba):
+    #     dpos_map[tuple(b)] = (float(ab), float(ba), float(cab), float(cba), float(eab), float(eba))
+    for b, predictions in zip(pairs, predictions):
+        dpos_map[tuple(b)] = predictions.cpu().numpy().squeez()
     return dpos_map
 
 
@@ -373,48 +365,38 @@ if __name__ == '__main__':
     ECB = 'ecb'
     GVC = 'gvc'
     print('tps', 'fps',  'fns')
-    # predict('ecb', DEV)
-    # predict('ecb', TEST)
-    #
-    # predict('ecb', DEV, heu='lh_oracle')
-    predict('ecb', TEST, heu='lh_oracle')
-    #
-    # predict('gvc', DEV)
-    # predict('gvc', TEST)
-    # #
-    # # predict('gvc', DEV, heu='lh_oracle')
-    # predict('gvc', TEST, heu='lh_oracle')
-    # dpos = dpos_tmp('ecb', 'dev')
-    # predict_with_dpos('ecb', 'dev', dpos, heu='lh_oracle')
+    heu = 'lh_oracle'
+    dpos_path = '/home/yaolong/lemma_cross/output/cf/2024-09-10-22:14:31/ecb/small/scorer/best_f1_scorer/CrossEncoder/'
+    # threshold = 0.1
+    # 初始化最佳阈值和相应的F1分数
+    best_threshold = None
+    best_f1 = 0.0
+    for threshold in range(1, 10):
 
+        threshold /= 10.0  # 将范围调整为0.1到0.9
+        test_pairs, predictions1, test_scores_ab, test_scores_ba, c_only_test_scores_ab, c_only_test_scores_ba, e_only_test_scores_ab, e_only_test_scores_ba, f1 = save_dpos_scores(ECB, TEST, dpos_path, heu=heu, threshold=threshold, text_key='bert_sentence', max_sentence_len=512, long=False)
+        current_f1 = f1
+        # 更新最佳阈值和F1分数
+        if current_f1 > best_f1:
+            best_f1 = current_f1
+            best_threshold = threshold
+            pickle.dump(test_pairs, open(args.save_model_path + f'/dpos/{TEST}_{heu}_pairs.pkl', 'wb'))
+            pickle.dump(test_scores_ab, open(args.save_model_path + f'/dpos/{TEST}_{heu}_scores_ab.pkl', 'wb'))
+            pickle.dump(test_scores_ba, open(args.save_model_path + f'/dpos/{TEST}_{heu}_scores_ba.pkl', 'wb'))
+            pickle.dump(c_only_test_scores_ab, open(args.save_model_path + f'/dpos/{TEST}_{heu}_c_only_test_scores_ab.pkl', 'wb'))
+            pickle.dump(c_only_test_scores_ba, open(args.save_model_path + f'/dpos/{TEST}_{heu}_c_only_test_scores_ba.pkl', 'wb'))
+            pickle.dump(e_only_test_scores_ab, open(args.save_model_path + f'/dpos/{TEST}_{heu}_e_only_test_scores_ab.pkl', 'wb'))
+            pickle.dump(e_only_test_scores_ba, open(args.save_model_path + f'/dpos/{TEST}_{heu}_e_only_test_scores_ba.pkl', 'wb'))
+            pickle.dump(predictions1, open(args.save_model_path + f'/dpos/{TEST}_{heu}_predictions1.pkl', 'wb'))
+    print(f"Best threshold is {best_threshold} with F1 score {best_f1}")
 
-    # dataset = 'gvc'
-    # split = 'test'
-    # heu = 'lh_oracle'
-    # dpos_path =  './datasets/gvc/scorer/'
-    # save_dpos_scores(dataset, split, dpos_path, heu='lh', text_key='bert_sentence', max_sentence_len=512)
-
-    # dpos = get_dpos(dataset, heu, split)
-    # predict_with_dpos(dataset, split, dpos, heu=heu)
-
-
-    # (tps, fps, _, fns), mps_t = lh_oracle_split(dataset, split, 0.05)
-    # (tps, fps, _, fns), mps_t = lh_oracle_split(dataset, split, -1)
-
-    # print(len(tps), len(fps), len(fns))
-
-    # dpos_path = './datasets/ecb/scorer/chk_2/'
-    # dpos_path = './model_weights/chk_30/'
-    # save_dpos_scores(dataset, split, dpos_path, heu=heu, text_key='bert_doc', max_sentence_len=1024)
-    # dpos = get_dpos(dataset, heu, split)
-    # predict_with_dpos(dataset, split, dpos, heu=heu)
-    # save_dpos_scores('gvc', 'dev', dpos_path, heu='lh')
-    # threshold_ablation()
-    # mention_pair_analysis(dataset, split, heu)
-
-    # LH + D small
-    heu = 'lh'
-    dpos_path = './ecb_small/'
-    save_dpos_scores(ECB, TEST, dpos_path, heu=heu, text_key='bert_sentence', max_sentence_len=512, long=False)
     dpos = get_dpos(ECB, heu, TEST)
-    predict_with_dpos(ECB, TEST, dpos, heu=heu)
+    bset_conf = 0.0
+    best_threshold_conf = None
+    for threshold in range(1, 10):
+        threshold /= 10.0  # 将范围调整为0.1到0.9
+        conf = predict_with_dpos(ECB, TEST, dpos, heu=heu, threshold=threshold)
+        if conf > bset_conf:
+            bset_conf = conf
+            best_threshold_conf = threshold
+    print(f"Best threshold is {best_threshold_conf} with F1 score {bset_conf}")

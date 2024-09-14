@@ -311,12 +311,12 @@ def generate_key_file(coref_map_tuples, name, out_dir, out_file_path):
                 clus_to_int[clus_id] = clus_number
                 clus_number += 1
                 clus_int = clus_to_int[clus_id]  # 聚类的索引
-            of.write("%s\t0\t%d\t%s\t(%d)\n" % (name, i, en_id, clus_int)) # 当前事件提及所在的聚类的索引
+            of.write("%s\t0\t%d\t%s\t(%d)\n" % (name, i, en_id, clus_int)) # 当前事件提及所在的聚类的索引  evt 索引 事件提及 所在聚类索引
         of.write("#end document\n")
 
 
 def cluster(mentions, mention_pairs, similarities, threshold=0):
-    n = len(mentions)
+
     m_id2ind = {m: i for i, m in enumerate(mentions)}
 
     mention_ind_pairs = [(m_id2ind[mp[0]], m_id2ind[mp[1]]) for mp in mention_pairs]
@@ -325,7 +325,8 @@ def cluster(mentions, mention_pairs, similarities, threshold=0):
     # create similarity matrix from the similarities
     n = len(mentions)
     similarity_matrix = np.identity(n)
-    similarity_matrix[rows, cols] = similarities
+    numpy_similarities = [tensor.cpu().numpy().squeeze() for tensor in similarities]
+    similarity_matrix[rows, cols] = numpy_similarities
 
     clusters, labels = cluster_cc(similarity_matrix, threshold=threshold)
     m_id2cluster = {m: i for m, i in zip(mentions, labels)}

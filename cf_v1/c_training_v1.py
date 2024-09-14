@@ -1,5 +1,4 @@
 import sys
-sys.path.append("../")
 import pickle
 import torch
 from c_helper_v1 import tokenize, forward_ab, f1_score, accuracy, precision, recall, save_parameters, save_results_to_csv
@@ -14,7 +13,7 @@ from argument import args
 
 
 def train_dpos(dataset, model_name=None, PLM=None, device=None):
-    dataset_folder = f'/home/yaolong/lemma_cross/datasets/{dataset}/'
+    dataset_folder = f'/root/autodl-tmp/lemma_cross/datasets/{dataset}/'
     save_model_path = args.save_model_path
     mention_map = pickle.load(open(dataset_folder + "mention_map.pkl", 'rb'))
     evt_mention_map = {m_id: m for m_id, m in mention_map.items() if m['men_type'] == 'evt'}
@@ -35,8 +34,8 @@ def train_dpos(dataset, model_name=None, PLM=None, device=None):
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     # model_name = 'roberta-base'
-    scorer_module = CrossEncoder(is_training=True, tokenizer=tokenizer, model_name=model_name).to(device)
-
+    scorer_module = CrossEncoder(is_training=True, tokenizer=tokenizer, model_name=model_name)
+    scorer_module = scorer_module.to(device)
     parallel_model = torch.nn.DataParallel(scorer_module, device_ids=device_ids)
     parallel_model.module.to(device)
 
@@ -60,9 +59,9 @@ def train(dataset,
           lr_class=0.001):
     bce_loss = torch.nn.BCELoss()
     # mse_loss = torch.nn.MSELoss()
-
+    model_params = filter(lambda p: p.requires_grad, parallel_model.module.model.parameters())
     optimizer = torch.optim.AdamW([
-        {'params': parallel_model.module.model.parameters(), 'lr': lr_lm},
+        {'params':model_params, 'lr': lr_lm},
         {'params': parallel_model.module.linear.parameters(), 'lr': lr_class},
         {'params': parallel_model.module.c_linear.parameters(), 'lr': lr_class},
         {'params': parallel_model.module.e_linear.parameters(), 'lr': lr_class}
@@ -190,7 +189,7 @@ def train(dataset,
 
 
 if __name__ == '__main__':
-    device = args.gpu_num
+    device = 0
     print(f'train  ecb ... model_name: {args.model_name}, PLM: {args.PLM}, device: {device}')
     train_dpos('ecb', model_name=args.model_name, PLM=args.PLM, device=device)
     print(f'train  gvc ... model_name: {args.model_name}, PLM: {args.PLM}, device: {device}')

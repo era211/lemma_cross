@@ -12,6 +12,7 @@ from helper import cluster
 torch.backends.cuda.matmul.allow_tf32 = False
 torch.backends.cudnn.allow_tf32 = False
 import pandas as pd
+from argument import args
 
 
 def read(key, response):
@@ -38,8 +39,8 @@ def predict_dpos(parallel_model, dev_ab, dev_ba, device, batch_size):
 
 
 def predict_trained_model(mention_map, model_name, linear_weights_path, test_pairs, text_key='bert_doc', max_sentence_len=1024, long=True):
-    device = torch.device('cuda:6')
-    device_ids = list(range(1))
+    device = torch.device('cuda:0')
+    device_ids = [device]
     linear_weights = torch.load(linear_weights_path)
     scorer_module = CrossEncoder(is_training=False, model_name=model_name, long=long,
                                       linear_weights=linear_weights).to(device)
@@ -56,7 +57,7 @@ def predict_trained_model(mention_map, model_name, linear_weights_path, test_pai
     return scores_ab, scores_ba, test_pairs
 
 
-def save_dpos_scores(dataset, split, dpos_folder, heu='lh', threshold=0.999, text_key='bert_doc', max_sentence_len=1024, long=True):
+def save_dpos_scores(dataset, split, dpos_folder, heu='lh', threshold=None, text_key='bert_doc', max_sentence_len=1024, long=True):
     dataset_folder = f'./datasets/{dataset}/'
     mention_map = pickle.load(open(dataset_folder + "/mention_map.pkl", 'rb'))
     evt_mention_map = {m_id: m for m_id, m in mention_map.items() if m['men_type'] == 'evt' and m['split'] == split}
@@ -72,25 +73,23 @@ def save_dpos_scores(dataset, split, dpos_folder, heu='lh', threshold=0.999, tex
     test_pairs = tps + fps
     test_labels = [1]*len(tps) + [0]*len(fps)
 
-    linear_weights_path = dpos_folder + "/linear.chkpt"
+    linear_weights_path = dpos_folder + "linear.chkpt"
     bert_path = dpos_folder + 'bert'
 
     scores_ab, scores_ba, pairs = predict_trained_model(evt_mention_map, bert_path, linear_weights_path, test_pairs, text_key, max_sentence_len, long=True)
 
-    predictions = (scores_ab + scores_ba)/2
+    predictions1 = (scores_ab + scores_ba)/2
 
-    predictions = torch.squeeze(predictions) > threshold
+    predictions = torch.squeeze(predictions1) > threshold
 
     test_labels = torch.LongTensor(test_labels)
-
+    f1 = f1_score(predictions, test_labels)
     print("Test accuracy:", accuracy(predictions, test_labels))
     print("Test precision:", precision(predictions, test_labels))
     print("Test recall:", recall(predictions, test_labels))
-    print("Test f1:", f1_score(predictions, test_labels))
+    print("Test f1:", f1)
 
-    pickle.dump(test_pairs, open(dataset_folder + f'/dpos/{split}_{heu}_pairs.pkl', 'wb'))
-    pickle.dump(scores_ab, open(dataset_folder + f'/dpos/{split}_{heu}_scores_ab.pkl', 'wb'))
-    pickle.dump(scores_ba, open(dataset_folder + f'/dpos/{split}_{heu}_scores_ba.pkl', 'wb'))
+    return dataset_folder, test_pairs, predictions1, scores_ab, scores_ba, f1
 
 
 def get_cluster_scores(dataset_folder, evt_mention_map, all_mention_pairs, dataset, split, heu, similarities, dpos_score_map, out_name, threshold):
@@ -102,13 +101,16 @@ def get_cluster_scores(dataset_folder, evt_mention_map, all_mention_pairs, datas
     generate_key_file(curr_gold_cluster_map, 'evt', dataset_folder, gold_key_file)
 
     w_dpos_sims = []
-    for p, sim in zip(all_mention_pairs, similarities):
+    for p, sim in zip(all_mention_pairs, similarities):  #
         if tuple(p) in dpos_score_map:
-            w_dpos_sims.append(np.mean(dpos_score_map[p]))
+            q = dpos_score_map[p]
+            # w_dpos_sims.append(np.mean(dpos_score_map[p]))  #             print(dpos_score_map[p])
+            w_dpos_sims.append(dpos_score_map[p])
         elif (p[1], p[0]) in dpos_score_map:
-            w_dpos_sims.append(np.mean(dpos_score_map[p[1], p[0]]))
+            # w_dpos_sims.append(np.mean(dpos_score_map[p[1], p[0]]))  #             print('(p[1], p[0]) in dpos_score_map')
+            w_dpos_sims.append(dpos_score_map[p[1], p[0]])
         else:
-            w_dpos_sims.append(sim)
+            w_dpos_sims.append(sim)  #             print('w_dpos_sims.append(sim)')
 
     mid2cluster = cluster(curr_mentions, all_mention_pairs, w_dpos_sims, threshold)
     system_key_file = dataset_folder + f'/evt_gold_dpos_{out_name}.keyfile'
@@ -128,7 +130,7 @@ def get_cluster_scores(dataset_folder, evt_mention_map, all_mention_pairs, datas
     return conf
 
 
-def predict_with_dpos(dataset, split, dpos_score_map, heu='lh', threshold=0.5):
+def predict_with_dpos(dataset, split, dpos_score_map, heu='lh', threshold=None):
     dataset_folder = f'./datasets/{dataset}/'
     mention_map = pickle.load(open(dataset_folder + "/mention_map.pkl", 'rb'))
     evt_mention_map = {m_id: m for m_id, m in mention_map.items() if m['men_type'] == 'evt' and m['split'] == split}
@@ -140,8 +142,8 @@ def predict_with_dpos(dataset, split, dpos_score_map, heu='lh', threshold=0.5):
     all_mention_pairs = tps + fps
     heu_predictions = np.array([1] * len(tps) + [0] * len(fps))
     # print(len(fps,))
-    get_cluster_scores(dataset_folder, evt_mention_map, all_mention_pairs, dataset, split, heu, heu_predictions, dpos_score_map, out_name=heu, threshold=threshold)
-
+    conf = get_cluster_scores(dataset_folder, evt_mention_map, all_mention_pairs, dataset, split, heu, heu_predictions, dpos_score_map, out_name=heu, threshold=threshold)
+    return conf
 
 def predict(dataset, split, heu='lh'):
     dataset_folder = f'./datasets/{dataset}/'
@@ -197,12 +199,15 @@ def dpos_tmp(dataset, split):
 
 def get_dpos(dataset, heu, split):
     dataset_folder = f'./datasets/{dataset}/'
-    pairs = pickle.load(open(dataset_folder + f"/dpos/{split}_{heu}_pairs.pkl", 'rb'))
-    scores_ab = pickle.load(open(dataset_folder + f"/dpos/{split}_{heu}_scores_ab.pkl", 'rb'))
-    scores_ba = pickle.load(open(dataset_folder + f"/dpos/{split}_{heu}_scores_ba.pkl", 'rb'))
+    pairs = pickle.load(open(dataset_folder + f"/dpos1/{split}_{heu}_pairs.pkl", 'rb'))
+    scores_ab = pickle.load(open(dataset_folder + f"/dpos1/{split}_{heu}_scores_ab.pkl", 'rb'))
+    scores_ba = pickle.load(open(dataset_folder + f"/dpos1/{split}_{heu}_scores_ba.pkl", 'rb'))
+    predictions = pickle.load(open(dataset_folder + f"/dpos1/{split}_{heu}_predictions.pkl", 'rb'))
     dpos_map = {}
-    for b, ab, ba in zip(pairs, scores_ab, scores_ba):
-        dpos_map[tuple(b)] = (float(ab), float(ba))
+    # for b, ab, ba in zip(pairs, scores_ab, scores_ba):
+    #     dpos_map[tuple(b)] = (float(ab), float(ba))
+    for b, prediction in zip(pairs, predictions):
+        dpos_map[tuple(b)] = prediction
     return dpos_map
 
 
@@ -308,8 +313,34 @@ if __name__ == '__main__':
     ECB = 'ecb'
     GVC = 'gvc'
     print('tps', 'fps',  'fns')
-    heu = 'lh'
+    heu = 'lh_oracle'
     dpos_path = '/home/yaolong/lemma_cross/output/ecb/small/scorer/best_f1_scorer/'
-    save_dpos_scores(ECB, TEST, dpos_path, heu=heu, text_key='bert_sentence', max_sentence_len=512, long=False)
+    # threshold = 0.1
+    # 初始化最佳阈值和相应的F1分数
+    best_threshold = None
+    best_f1 = 0.0
+    # for threshold in range(1, 10):
+
+    threshold = 0.1  # 将范围调整为0.1到0.9
+    dataset_folder, test_pairs, predictions1, scores_ab, scores_ba, f1 = save_dpos_scores(ECB, TEST, dpos_path, heu=heu, threshold=threshold, text_key='bert_sentence', max_sentence_len=512, long=False)
+    current_f1 = f1
+    # 更新最佳阈值和F1分数
+    if current_f1 > best_f1:
+        best_f1 = current_f1
+        best_threshold = threshold
+        pickle.dump(test_pairs, open(dataset_folder + f'/dpos1/{TEST}_{heu}_pairs.pkl', 'wb'))
+        pickle.dump(predictions1, open(dataset_folder + f'/dpos1/{TEST}_{heu}_predictions.pkl', 'wb'))
+        pickle.dump(scores_ab, open(dataset_folder + f'/dpos1/{TEST}_{heu}_scores_ab.pkl', 'wb'))
+        pickle.dump(scores_ba, open(dataset_folder + f'/dpos1/{TEST}_{heu}_scores_ba.pkl', 'wb'))
+    print(f"Best threshold is {best_threshold} with F1 score {best_f1}")
+
     dpos = get_dpos(ECB, heu, TEST)
-    predict_with_dpos(ECB, TEST, dpos, heu=heu)
+    bset_conf = 0.0
+    best_threshold_conf = None
+    for threshold in range(1, 10):
+        threshold /= 10.0  # 将范围调整为0.1到0.9
+        conf = predict_with_dpos(ECB, TEST, dpos, heu=heu, threshold=threshold)
+        if conf > bset_conf:
+            bset_conf = conf
+            best_threshold_conf = threshold
+    print(f"Best threshold is {best_threshold_conf} with F1 score {bset_conf}")

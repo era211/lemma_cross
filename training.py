@@ -6,11 +6,11 @@ import random
 from tqdm import tqdm
 import os
 from models import CrossEncoder
-
+from argument import args
 
 def train_dpos(dataset, model_name=None, PLM=None, device=None):
     dataset_folder = f'./datasets/{dataset}/'
-    working_folder = f'./output/{dataset}/'
+    working_folder = args.save_model_path
     mention_map = pickle.load(open(dataset_folder + "/mention_map.pkl", 'rb'))
     evt_mention_map = {m_id: m for m_id, m in mention_map.items() if m['men_type'] == 'evt'}
 
@@ -34,10 +34,11 @@ def train_dpos(dataset, model_name=None, PLM=None, device=None):
 
     parallel_model = torch.nn.DataParallel(scorer_module, device_ids=device_ids)
     parallel_model.module.to(device)
-    train(train_pairs, train_labels, dev_pairs, dev_labels, parallel_model, evt_mention_map, working_folder, device, PLM, batch_size=16, n_iters=10, lr_lm=0.000001, lr_class=0.0001)
+    train(dataset, train_pairs, train_labels, dev_pairs, dev_labels, parallel_model, evt_mention_map, working_folder, device, PLM, batch_size=16, n_iters=10, lr_lm=0.000001, lr_class=0.0001)
 
 
-def train(train_pairs,
+def train(dataset,
+          train_pairs,
           train_labels,
           dev_pairs,
           dev_labels,
@@ -111,7 +112,7 @@ def train(train_pairs,
         dev_f1 = f1_score(dev_predictions, dev_labels)
         if dev_f1 > f1:
             f1 = dev_f1
-            scorer_folder = working_folder + PLM + '/scorer/best_f1_scorer'
+            scorer_folder = working_folder + '/' + dataset + '/' + PLM + '/scorer/best_f1_scorer'
             if not os.path.exists(scorer_folder):
                 os.makedirs(scorer_folder)
             model_path = scorer_folder + '/linear.chkpt'
@@ -121,7 +122,7 @@ def train(train_pairs,
             print(f'saved best f1 model')
 
         if n % 2 == 0:
-            scorer_folder = working_folder + PLM + f'/scorer/chk_{n}'
+            scorer_folder = working_folder + '/' + dataset + '/' + PLM + f'/scorer/chk_{n}'
             if not os.path.exists(scorer_folder):
                 os.makedirs(scorer_folder)
             model_path = scorer_folder + '/linear.chkpt'
@@ -130,7 +131,7 @@ def train(train_pairs,
             parallel_model.module.tokenizer.save_pretrained(scorer_folder + '/bert')
             print(f'saved model at {n}')
 
-    scorer_folder = working_folder + PLM + '/scorer/final'
+    scorer_folder = working_folder + '/' + dataset + '/' + PLM + '/scorer/final'
     if not os.path.exists(scorer_folder):
         os.makedirs(scorer_folder)
     model_path = scorer_folder + '/linear.chkpt'
@@ -140,6 +141,6 @@ def train(train_pairs,
 
 
 if __name__ == '__main__':
-    device = 0
-    train_dpos('ecb', model_name='/home/yaolong/PT_MODELS/PT_MODELS/roberta-base',PLM='small', device=device)
-    train_dpos('gvc', model_name='/home/yaolong/PT_MODELS/PT_MODELS/roberta-base', PLM='small', device=device)
+    device = args.gpu_num
+    train_dpos('ecb', model_name='/home/share/models/PT_MODELS/roberta-base',PLM='small', device=device)
+    train_dpos('gvc', model_name='/home/share/models/PT_MODELS/roberta-base', PLM='small', device=device)

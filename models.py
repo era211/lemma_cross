@@ -58,7 +58,8 @@ class CrossEncoder(nn.Module):
             output = self.model(input_ids,
                                 position_ids=position_ids,
                                 attention_mask=attention_mask,
-                                global_attention_mask=None)
+                                # global_attention_mask=None
+                                )
         else:
             output = self.model(input_ids,
                                 attention_mask=attention_mask)
